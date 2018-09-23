@@ -12,15 +12,20 @@ ifndef __mkutils_version__
 
 __mkutils_version__ := 0.0.0
 
-# Can be overriden from command line
-PREFIX :=
-EXESUFF :=
+##
+# Help to specify the location of tools used by mkutils. TOOLS_PREFIX should
+# be an absolute path to the tools directory (must ends with `/`),
+# TOOLS_EXESUFF specifies the tool's extension (i.e. `.exe`). If TOOLS_PREFIX
+# (TOOLS_EXESUFF) is not defined, PREFIX (EXESUFF) are used as default.
+TOOLS_PREFIX ?= $(PREFIX)
+TOOLS_EXESUFF ?= $(EXESUFF)
 
-# Programs
-ECHO := $(PREFIX)echo$(EXESUFF)
-TEST := $(PREFIX)test$(EXESUFF)
-WHICH := $(PREFIX)which$(EXESUFF)
-PRINTF := $(PREFIX)printf$(EXESUFF)
+##
+# Tools. The user has last word here.
+ECHO ?= $(TOOLS_PREFIX)echo$(TOOLS_EXESUFF)
+TEST ?= $(TOOLS_PREFIX)test$(TOOLS_EXESUFF)
+WHICH ?= $(TOOLS_PREFIX)which$(TOOLS_EXESUFF)
+PRINTF ?= $(TOOLS_PREFIX)printf$(TOOLS_EXESUFF)
 
 # Set default goal's name
 .DEFAULT_GOAL := all
