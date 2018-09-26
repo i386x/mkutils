@@ -2,7 +2,7 @@
 #! \file    ~/mkutils.mk
 #! \author  Jiří Kučera, <sanczes AT gmail.com>
 #! \stamp   2018-09-05 15:52:56 +0200
-#! \project mkutils: Makefile Utilities
+#! \project mkutils - Makefile Utilities
 #! \license MIT
 #! \version 0.0.0
 #! \brief   Makefile utilities.
@@ -10,7 +10,75 @@
 
 ifndef __mkutils_version__
 
+# mkutils version
 __mkutils_version__ := 0.0.0
+
+# Detect if are running under MS Windows
+ifneq ($(PATHEXT),)
+__mkutils_mswindows := 1
+endif
+
+# Detect for coloured output support
+ifneq ($(__mkutils_mswindows),)
+__mkutils_color = $1
+else ifneq ($(COLORTERM),)
+__mkutils_color = $1
+else ifneq ($(findstring color,$(TERM)),)
+__mkutils_color = $1
+else ifeq ($(TERM),xterm)
+__mkutils_color = $1
+else ifeq ($(TERM),linux)
+__mkutils_color = $1
+else
+__mkutils_color =
+endif
+
+# The user has the last word
+ifdef NOCOLORS
+__mkutils_color =
+export NOCOLORS
+endif
+
+# Enable `-e` option for $(ECHO) only if coloring is supported
+__mkutils_echo_e := $(call __mkutils_color,-e)
+
+##
+# Handy constants.
+EMPTY :=
+SPACE := $(EMPTY) $(EMPTY)
+LINE := ---------------------------------------
+LINE := $(LINE)$(LINE)-
+DLINE := =======================================
+DLINE := $(DLINE)$(DLINE)=
+
+##
+# ANSI color escape codes to be handled by `$(ECHO) -e`.
+ANSI_COLOR_OFF := $(call __mkutils_color,\e[0m)
+ANSI_COLOR_BLACK := $(call __mkutils_color,\e[0;30m)
+ANSI_COLOR_RED := $(call __mkutils_color,\e[0;31m)
+ANSI_COLOR_GREEN := $(call __mkutils_color,\e[0;32m)
+ANSI_COLOR_BROWN := $(call __mkutils_color,\e[0;33m)
+ANSI_COLOR_BLUE := $(call __mkutils_color,\e[0;34m)
+ANSI_COLOR_PURPLE := $(call __mkutils_color,\e[0;35m)
+ANSI_COLOR_CYAN := $(call __mkutils_color,\e[0;36m)
+ANSI_COLOR_LIGHT_GRAY := $(call __mkutils_color,\e[0;37m)
+ANSI_COLOR_DARK_GRAY := $(call __mkutils_color,\e[1;30m)
+ANSI_COLOR_LIGHT_RED := $(call __mkutils_color,\e[1;31m)
+ANSI_COLOR_LIGHT_GREEN := $(call __mkutils_color,\e[1;32m)
+ANSI_COLOR_YELLOW := $(call __mkutils_color,\e[1;33m)
+ANSI_COLOR_LIGHT_BLUE := $(call __mkutils_color,\e[1;34m)
+ANSI_COLOR_LIGHT_PURPLE := $(call __mkutils_color,\e[1;35m)
+ANSI_COLOR_LIGHT_CYAN := $(call __mkutils_color,\e[1;36m)
+ANSI_COLOR_WHITE := $(call __mkutils_color,\e[1;37m)
+
+##
+# Colorize $1 $2
+# -----------------------------------------------------------------------------
+# $1 - color name (without ANSI_COLOR_ prefix)
+# $2 - text
+# -----------------------------------------------------------------------------
+# Make $2 $1-colored.
+Colorize = $(ANSI_COLOR_$1)$2$(ANSI_COLOR_OFF)
 
 ##
 # Help to specify the location of tools used by mkutils. TOOLS_PREFIX should
@@ -18,18 +86,31 @@ __mkutils_version__ := 0.0.0
 # TOOLS_EXESUFF specifies the tool's extension (i.e. `.exe`). If TOOLS_PREFIX
 # (TOOLS_EXESUFF) is not defined, PREFIX (EXESUFF) are used as default.
 TOOLS_PREFIX ?= $(PREFIX)
+export TOOLS_PREFIX
 TOOLS_EXESUFF ?= $(EXESUFF)
+export TOOLS_EXESUFF
 
 ##
 # Tools. The user has last word here.
+TRUE ?= $(TOOLS_PREFIX)true$(TOOLS_EXESUFF)
+export TRUE
+FALSE ?= $(TOOLS_PREFIX)false$(TOOLS_EXESUFF)
+export FALSE
 ECHO ?= $(TOOLS_PREFIX)echo$(TOOLS_EXESUFF)
+export ECHO
 TEST ?= $(TOOLS_PREFIX)test$(TOOLS_EXESUFF)
+export TEST
 WHICH ?= $(TOOLS_PREFIX)which$(TOOLS_EXESUFF)
+export WHICH
 PRINTF ?= $(TOOLS_PREFIX)printf$(TOOLS_EXESUFF)
+export PRINTF
 
 # Set default goal's name
 .DEFAULT_GOAL := all
 .PHONY: all
+
+# Auxiliary internal variables
+__mkutils_temp :=
 
 ## ============================================================================
 ## == 1) Boolean operations                                                  ==
@@ -86,7 +167,7 @@ Tail_ = $(wordlist 2,$(words $1),$1)
 # -----------------------------------------------------------------------------
 # Return true if $1 == $2.
 Eq = $(call Eq_,$(strip $1),$(strip $2))
-Eq_ = $(call ExitsWith_,$(TEST) $1 -eq $2,0)
+Eq_ = $(call ExitsWith,$(TEST) $1 -eq $2,0)
 
 ##
 # Ne $1 $2
@@ -95,7 +176,7 @@ Eq_ = $(call ExitsWith_,$(TEST) $1 -eq $2,0)
 # -----------------------------------------------------------------------------
 # Return true if $1 != $2.
 Ne = $(call Ne_,$(strip $1),$(strip $2))
-Ne_ = $(call ExitsWith_,$(TEST) $1 -ne $2,0)
+Ne_ = $(call ExitsWith,$(TEST) $1 -ne $2,0)
 
 ##
 # Lt $1 $2
@@ -104,7 +185,7 @@ Ne_ = $(call ExitsWith_,$(TEST) $1 -ne $2,0)
 # -----------------------------------------------------------------------------
 # Return true if $1 < $2.
 Lt = $(call Lt_,$(strip $1),$(strip $2))
-Lt_ = $(call ExitsWith_,$(TEST) $1 -lt $2,0)
+Lt_ = $(call ExitsWith,$(TEST) $1 -lt $2,0)
 
 ##
 # Gt $1 $2
@@ -113,7 +194,7 @@ Lt_ = $(call ExitsWith_,$(TEST) $1 -lt $2,0)
 # -----------------------------------------------------------------------------
 # Return true if $1 > $2.
 Gt = $(call Gt_,$(strip $1),$(strip $2))
-Gt_ = $(call ExitsWith_,$(TEST) $1 -gt $2,0)
+Gt_ = $(call ExitsWith,$(TEST) $1 -gt $2,0)
 
 ##
 # Le $1 $2
@@ -122,7 +203,7 @@ Gt_ = $(call ExitsWith_,$(TEST) $1 -gt $2,0)
 # -----------------------------------------------------------------------------
 # Return true if $1 <= $2.
 Le = $(call Le_,$(strip $1),$(strip $2))
-Le_ = $(call ExitsWith_,$(TEST) $1 -le $2,0)
+Le_ = $(call ExitsWith,$(TEST) $1 -le $2,0)
 
 ##
 # Ge $1 $2
@@ -131,7 +212,7 @@ Le_ = $(call ExitsWith_,$(TEST) $1 -le $2,0)
 # -----------------------------------------------------------------------------
 # Return true if $1 >= $2.
 Ge = $(call Ge_,$(strip $1),$(strip $2))
-Ge_ = $(call ExitsWith_,$(TEST) $1 -ge $2,0)
+Ge_ = $(call ExitsWith,$(TEST) $1 -ge $2,0)
 
 ##
 # Equal $1 $2
@@ -181,7 +262,7 @@ AssertVar_ = $(call Assert_,$($1),$1 is empty or undefined)
 # -----------------------------------------------------------------------------
 # Proceed with error if $1 != $2.
 AssertEq = $(call AssertEq_,$(strip $1),$(strip $2))
-AssertEq_ = $(call Assert_,$(call Eq_,$1,$2),Assertion failed: $1 == $2)
+AssertEq_ = $(call Assert_,$(call Eq_,$1,$2),Assertion x == y failed: $1 != $2)
 
 ##
 # AssertNe $1 $2
@@ -190,7 +271,7 @@ AssertEq_ = $(call Assert_,$(call Eq_,$1,$2),Assertion failed: $1 == $2)
 # -----------------------------------------------------------------------------
 # Proceed with error if $1 == $2.
 AssertNe = $(call AssertNe_,$(strip $1),$(strip $2))
-AssertNe_ = $(call Assert_,$(call Ne_,$1,$2),Assertion failed: $1 != $2)
+AssertNe_ = $(call Assert_,$(call Ne_,$1,$2),Assertion x != y failed: $1 == $2)
 
 ##
 # AssertLt $1 $2
@@ -199,7 +280,7 @@ AssertNe_ = $(call Assert_,$(call Ne_,$1,$2),Assertion failed: $1 != $2)
 # -----------------------------------------------------------------------------
 # Proceed with error if $1 >= $2.
 AssertLt = $(call AssertLt_,$(strip $1),$(strip $2))
-AssertLt_ = $(call Assert_,$(call Lt_,$1,$2),Assertion failed: $1 < $2)
+AssertLt_ = $(call Assert_,$(call Lt_,$1,$2),Assertion x < y failed: $1 >= $2)
 
 ##
 # AssertGt $1 $2
@@ -208,7 +289,7 @@ AssertLt_ = $(call Assert_,$(call Lt_,$1,$2),Assertion failed: $1 < $2)
 # -----------------------------------------------------------------------------
 # Proceed with error if $1 <= $2.
 AssertGt = $(call AssertGt_,$(strip $1),$(strip $2))
-AssertGt_ = $(call Assert_,$(call Gt_,$1,$2),Assertion failed: $1 > $2)
+AssertGt_ = $(call Assert_,$(call Gt_,$1,$2),Assertion x > y failed: $1 <= $2)
 
 ##
 # AssertLe $1 $2
@@ -217,7 +298,7 @@ AssertGt_ = $(call Assert_,$(call Gt_,$1,$2),Assertion failed: $1 > $2)
 # -----------------------------------------------------------------------------
 # Proceed with error if $1 > $2.
 AssertLe = $(call AssertLe_,$(strip $1),$(strip $2))
-AssertLe_ = $(call Assert_,$(call Le_,$1,$2),Assertion failed: $1 <= $2)
+AssertLe_ = $(call Assert_,$(call Le_,$1,$2),Assertion x <= y failed: $1 > $2)
 
 ##
 # AssertGe $1 $2
@@ -226,7 +307,7 @@ AssertLe_ = $(call Assert_,$(call Le_,$1,$2),Assertion failed: $1 <= $2)
 # -----------------------------------------------------------------------------
 # Proceed with error if $1 < $2.
 AssertGe = $(call AssertGe_,$(strip $1),$(strip $2))
-AssertGe_ = $(call Assert_,$(call Ge_,$1,$2),Assertion failed: $1 >= $2)
+AssertGe_ = $(call Assert_,$(call Ge_,$1,$2),Assertion x >= y failed: $1 < $2)
 
 ##
 # AssertEqual $1 $2
@@ -235,7 +316,9 @@ AssertGe_ = $(call Assert_,$(call Ge_,$1,$2),Assertion failed: $1 >= $2)
 # -----------------------------------------------------------------------------
 # Proceed with error if $1 != $2.
 AssertEqual = $(call AssertEqual_,$(strip $1),$(strip $2))
-AssertEqual_ = $(call Assert_,$(call Equal_,$1,$2),Assertion failed: $1 == $2)
+AssertEqual_ = $(call Assert_,$(call Equal_,$1,$2),$(strip \
+    Assertion x == y failed: '$1' != '$2' \
+))
 
 ##
 # AssertNotEqual $1 $2
@@ -244,9 +327,9 @@ AssertEqual_ = $(call Assert_,$(call Equal_,$1,$2),Assertion failed: $1 == $2)
 # -----------------------------------------------------------------------------
 # Proceed with error if $1 == $2.
 AssertNotEqual = $(call AssertNotEqual_,$(strip $1),$(strip $2))
-AssertNotEqual_ = $(call \
-    Assert_,$(call NotEqual_,$1,$2),Assertion failed: $1 != $2\
-)
+AssertNotEqual_ = $(call Assert_,$(call NotEqual_,$1,$2),$(strip \
+    Assertion x != y failed: '$1' == '$2' \
+))
 
 ## ============================================================================
 ## == 5) Running programs                                                    ==
@@ -254,6 +337,28 @@ AssertNotEqual_ = $(call \
 
 __mkutils_Run_output :=
 __mkutils_Run_exitcode := 0
+
+##
+# ShowOutput
+# -----------------------------------------------------------------------------
+# Show the output of the last command invoked by Run.
+ShowOutput = $(shell $(ECHO) $(__mkutils_echo_e) \
+    "$(call Colorize,LIGHT_GREEN,$(__mkutils_Run_output))" >&2 \
+)
+
+##
+# ShowExitcode
+# -----------------------------------------------------------------------------
+# Show the exit code of the last command invoked by Run.
+ShowExitcode = $(shell $(ECHO) $(__mkutils_echo_e) \
+    "$(call Colorize,LIGHT_RED,[exit_code = $(__mkutils_Run_exitcode)])" >&2 \
+)
+
+##
+# ShowStatus
+# -----------------------------------------------------------------------------
+# Show both output and exit code of the last command invoked by Run.
+ShowStatus = $(call ShowOutput)$(call ShowExitcode)
 
 ##
 # Run $1
@@ -272,7 +377,7 @@ Run = $(strip \
 # $1 - shell command
 # -----------------------------------------------------------------------------
 # Run $1 quietly.
-SoftRun = $(shell $1 >/dev/null 2>&1)
+SoftRun = $(eval __mkutils_temp := $(shell $1 >/dev/null 2>&1))
 
 ##
 # RunWithHooks $1 $2 $3
@@ -379,10 +484,12 @@ NeedPython = $(call NeedPython_,$(strip $1),$(strip $2))
 NeedPython_ = $(call AssertVar_,$2)$(call NeedPython_a,$($1),$($2))
 NeedPython_a = $(call NeedPython_b,$(call NeedPython_c,$1,$2),$2)
 NeedPython_b = $(if $1,$1,$(error Required Python X.Y, where XY >= $2))
-NeedPython_c = $(if $1,$(call NeedPython_d,$(Head_,$1),$(Tail_,$1),$2))
+NeedPython_c = $(strip \
+    $(if $1,$(call NeedPython_d,$(call Head_,$1),$(call Tail_,$1),$2)) \
+)
 NeedPython_d = $(call NeedPython_e,$(call NeedPython_f,$1,$3),$2,$3)
 NeedPython_e = $(if $1,$1,$(call NeedPython_c,$2,$3))
-NeedPython_f = $(if $(call Which,$1),$(call NeedPython_g,$1,$2))
+NeedPython_f = $(if $(call Which,$1),$(if $(call NeedPython_g,$1,$2),$1))
 NeedPython_g = $(call NeedPython_h, \
     $(call PyVersion,$1,major), \
     $(call PyVersion,$1,minor), \
@@ -408,6 +515,7 @@ __mkutils_help_targets :=
 #   (8 chars)
 #
 HELP_TGNCOLWIDTH := 8
+export HELP_TGNCOLWIDTH
 
 ##
 # DefaultTarget $1
@@ -425,7 +533,7 @@ DefaultTarget = $(eval .DEFAULT_GOAL := $(strip $1))
 # $3 - command
 # -----------------------------------------------------------------------------
 # Define $1 with help $2 that performs $3.
-Target = $(call Target_,$(strip $1),$(strip $2),$(strip $3))
+Target = $(eval $(call Target_,$(strip $1),$(strip $2),$(strip $3)))
 define Target_ =
 __mkutils_help_targets += help-$1
 .PHONY: help-$1
@@ -440,12 +548,13 @@ endef
 # GenerateHelp
 # -----------------------------------------------------------------------------
 # Define `help` target that prints help for all targets defined by Target.
-define GenerateHelp =
+GenerateHelp = $(eval $(call GenerateHelp_))
+define GenerateHelp_ =
 __mkutils_help_targets += help-help
-__mkutils_help_targets := $(sort $(__mkutils_help_targets))
+__mkutils_help_targets := $$(sort $$(__mkutils_help_targets))
 .PHONY: help-help
 help-help:
-	@$(PRINTF) "  %-$(HELP_TABSIZE)s - print this help\n" help
+	@$(PRINTF) "  %-$(HELP_TGNCOLWIDTH)s - print this help\n" help
 .PHONY: help_prologue
 help_prologue:
 	@$(ECHO) "Usage: $(MAKE) <target>"
@@ -455,7 +564,126 @@ help_prologue:
 help_epilogue:
 	@$(ECHO) ""
 .PHONY: help
-help: help_prologue $(__mkutils_help_targets) help_epilogue
+help: help_prologue $$(__mkutils_help_targets) help_epilogue
 endef
+
+## ============================================================================
+## == 8) Testing                                                             ==
+## ============================================================================
+
+__mkutils_passed :=
+__mkutils_failed :=
+
+##
+# TestsBegin
+# -----------------------------------------------------------------------------
+# Prepare for running the tests.
+TestsBegin = $(strip \
+    $(eval __mkutils_temp :=) \
+    $(eval __mkutils_passed :=) \
+    $(eval __mkutils_failed :=) \
+)
+
+##
+# TestsEnd
+# -----------------------------------------------------------------------------
+# Close the test phase, print overall statistics.
+define TestsEnd =
+all:;
+	@$(ECHO) ""
+	@$(ECHO) $(__mkutils_echo_e) "$(call Colorize,LIGHT_CYAN,Test Results)"
+	@$(ECHO) $(__mkutils_echo_e) "$(call Colorize,LIGHT_CYAN,$(DLINE))"
+	@$(ECHO) $(__mkutils_echo_e) \
+        "$(call Colorize,LIGHT_GREEN,Passed: $(words $(__mkutils_passed)))"
+	@$(ECHO) $(__mkutils_echo_e) \
+        "$(call Colorize,LIGHT_RED,Failed: $(words $(__mkutils_failed)))"
+	@$(ECHO) $(__mkutils_echo_e) "$(call Colorize,LIGHT_CYAN,$(LINE))"
+	@$(ECHO) $(__mkutils_echo_e) \
+        "$(call Colorize,YELLOW,Total: $(words \
+            $(__mkutils_passed) $(__mkutils_failed) \
+        ))"
+endef
+
+##
+# TestInfo $1
+# -----------------------------------------------------------------------------
+# $1 - test name
+# -----------------------------------------------------------------------------
+# Print info that $1 tests are now running.
+TestInfo = $(strip \
+    $(shell $(ECHO) "" >&2) \
+    $(shell $(ECHO) $(__mkutils_echo_e) \
+        "$(call Colorize,LIGHT_BLUE,Running $1 tests)" >&2 \
+    ) \
+    $(shell $(ECHO) $(__mkutils_echo_e) \
+        "$(call Colorize,LIGHT_BLUE,$(LINE))" >&2 \
+    ) \
+)
+
+##
+# TestFunc1 $1 $2 $3
+# -----------------------------------------------------------------------------
+# $1 - function name
+# $2 - 1st argument
+# $3 - expected result
+# -----------------------------------------------------------------------------
+# Test whether $1($2) == $3.
+TestFunc1 = $(strip \
+    $(shell $(ECHO) -n "Checking if $1('$2') == '$3': " >&2) \
+    $(eval __mkutils_temp := '$(call $1,$2)') \
+    $(call __mkutils_eval_test_result,Equal_,'$3') \
+)
+
+##
+# TestFunc2 $1 $2 $3 $4
+# -----------------------------------------------------------------------------
+# $1 - function name
+# $2 - 1st argument
+# $3 - 2nd argument
+# $4 - expected result
+# -----------------------------------------------------------------------------
+# Test whether $1($2, $3) == $4.
+TestFunc2 = $(strip \
+    $(shell $(ECHO) -n "Checking if $1('$2', '$3') == '$4': " >&2) \
+    $(eval __mkutils_temp := '$(call $1,$2,$3)') \
+    $(call __mkutils_eval_test_result,Equal_,'$4') \
+)
+
+##
+# TestFunc3 $1 $2 $3 $4 $5
+# -----------------------------------------------------------------------------
+# $1 - function name
+# $2 - 1st argument
+# $3 - 2nd argument
+# $4 - 3rd argument
+# $5 - expected result
+# -----------------------------------------------------------------------------
+# Test whether $1($2, $3, $4) == $5.
+TestFunc3 = $(strip \
+    $(shell $(ECHO) -n "Checking if $1('$2', '$3', '$4') == '$5': " >&2) \
+    $(eval __mkutils_temp := '$(call $1,$2,$3,$4)') \
+    $(call __mkutils_eval_test_result,Equal_,'$5') \
+)
+
+##
+# __mkutils_eval_test_result $1 $2
+# -----------------------------------------------------------------------------
+# $1 - comparison function
+# $2 - expected result
+# -----------------------------------------------------------------------------
+# Evaluate test as successful if $1($(__mkutils_temp), $2) is true. Otherwise,
+# test is evaluated as failed. For internal use only.
+__mkutils_eval_test_result = $(strip \
+    $(if $(call $1,$(__mkutils_temp),$2), \
+        $(eval __mkutils_passed += x) \
+        $(shell $(ECHO) $(__mkutils_echo_e) \
+            "$(call Colorize,LIGHT_GREEN,OK)" >&2 \
+        ), \
+        $(eval __mkutils_failed += x) \
+        $(shell $(ECHO) $(__mkutils_echo_e) \
+            "$(call Colorize,LIGHT_RED,ERROR: $(__mkutils_temp) != $2)" >&2 \
+        ) \
+    ) \
+)
 
 endif
