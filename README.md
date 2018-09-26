@@ -1,3 +1,3 @@
-# `mkutils`: Makefile Utilities
+# `mkutils` - Makefile Utilities
 
 WIP
