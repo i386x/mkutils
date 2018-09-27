@@ -10,11 +10,10 @@
 
 include $(CURDIR)/mkutils.mk
 
-HELP_TGNCOLWIDTH := 4
+HELP_FIRSTCOLWIDTH := 4
 $(call DefaultTarget, help)
 
-$(call Target, test, run test suite, \
-    $(MAKE) -f $(CURDIR)/tests.mk \
-)
+$(call Target, test, run test suite)
+	$(MAKE) -f $(CURDIR)/tests.mk
 
 $(call GenerateHelp)

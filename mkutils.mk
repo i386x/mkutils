@@ -505,8 +505,8 @@ NeedPython_i = $(if $1,$(if $2,$(call Ge_,$1$2,$3)))
 __mkutils_help_targets :=
 
 ##
-# Width of column with target names. Override this to set different value.
-# Example: With HELP_TGNCOLWIDTH set to 8, the help will be displayed as
+# Width of column with targets names. Override this to set different value.
+# Example: With HELP_FIRSTCOLWIDTH set to 8, the help will be displayed as
 #
 #   foo      - help for foo
 #   bar      - help for bar
@@ -514,8 +514,8 @@ __mkutils_help_targets :=
 #   ^^^^^^^^
 #   (8 chars)
 #
-HELP_TGNCOLWIDTH := 8
-export HELP_TGNCOLWIDTH
+HELP_FIRSTCOLWIDTH := 8
+export HELP_FIRSTCOLWIDTH
 
 ##
 # DefaultTarget $1
@@ -526,22 +526,19 @@ export HELP_TGNCOLWIDTH
 DefaultTarget = $(eval .DEFAULT_GOAL := $(strip $1))
 
 ##
-# Target $1 $2 $3
+# Target $1 $2
 # -----------------------------------------------------------------------------
 # $1 - target name
 # $2 - help text
-# $3 - command
 # -----------------------------------------------------------------------------
-# Define $1 with help $2 that performs $3.
-Target = $(eval $(call Target_,$(strip $1),$(strip $2),$(strip $3)))
+# Define $1 with help $2.
+Target = $(eval $(call Target_,$(strip $1),$(strip $2)))$(strip $1):
 define Target_ =
 __mkutils_help_targets += help-$1
 .PHONY: help-$1
 help-$1:
-	@$(PRINTF) "  %-$(HELP_TGNCOLWIDTH)s - $2\n" $1
+	@$(PRINTF) "  %-$(HELP_FIRSTCOLWIDTH)s - $2\n" $1
 .PHONY: $1
-$1:
-	$3
 endef
 
 ##
@@ -554,7 +551,7 @@ __mkutils_help_targets += help-help
 __mkutils_help_targets := $$(sort $$(__mkutils_help_targets))
 .PHONY: help-help
 help-help:
-	@$(PRINTF) "  %-$(HELP_TGNCOLWIDTH)s - print this help\n" help
+	@$(PRINTF) "  %-$(HELP_FIRSTCOLWIDTH)s - print this help\n" help
 .PHONY: help_prologue
 help_prologue:
 	@$(ECHO) "Usage: $(MAKE) <target>"
