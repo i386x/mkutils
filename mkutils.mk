@@ -10,37 +10,12 @@
 
 ifndef __mkutils_version__
 
+## ============================================================================
+## == 1) System settings                                                     ==
+## ============================================================================
+
 # mkutils version
 __mkutils_version__ := 0.0.0
-
-# Detect if are running under MS Windows
-ifneq ($(PATHEXT),)
-__mkutils_mswindows := 1
-endif
-
-# Detect for coloured output support
-ifneq ($(__mkutils_mswindows),)
-__mkutils_color = $1
-else ifneq ($(COLORTERM),)
-__mkutils_color = $1
-else ifneq ($(findstring color,$(TERM)),)
-__mkutils_color = $1
-else ifeq ($(TERM),xterm)
-__mkutils_color = $1
-else ifeq ($(TERM),linux)
-__mkutils_color = $1
-else
-__mkutils_color =
-endif
-
-# The user has the last word
-ifdef NOCOLORS
-__mkutils_color =
-export NOCOLORS
-endif
-
-# Enable `-e` option for $(ECHO) only if coloring is supported
-__mkutils_echo_e := $(call __mkutils_color,-e)
 
 ##
 # Handy constants.
@@ -50,35 +25,6 @@ LINE := ---------------------------------------
 LINE := $(LINE)$(LINE)-
 DLINE := =======================================
 DLINE := $(DLINE)$(DLINE)=
-
-##
-# ANSI color escape codes to be handled by `$(ECHO) -e`.
-ANSI_COLOR_OFF := $(call __mkutils_color,\e[0m)
-ANSI_COLOR_BLACK := $(call __mkutils_color,\e[0;30m)
-ANSI_COLOR_RED := $(call __mkutils_color,\e[0;31m)
-ANSI_COLOR_GREEN := $(call __mkutils_color,\e[0;32m)
-ANSI_COLOR_BROWN := $(call __mkutils_color,\e[0;33m)
-ANSI_COLOR_BLUE := $(call __mkutils_color,\e[0;34m)
-ANSI_COLOR_PURPLE := $(call __mkutils_color,\e[0;35m)
-ANSI_COLOR_CYAN := $(call __mkutils_color,\e[0;36m)
-ANSI_COLOR_LIGHT_GRAY := $(call __mkutils_color,\e[0;37m)
-ANSI_COLOR_DARK_GRAY := $(call __mkutils_color,\e[1;30m)
-ANSI_COLOR_LIGHT_RED := $(call __mkutils_color,\e[1;31m)
-ANSI_COLOR_LIGHT_GREEN := $(call __mkutils_color,\e[1;32m)
-ANSI_COLOR_YELLOW := $(call __mkutils_color,\e[1;33m)
-ANSI_COLOR_LIGHT_BLUE := $(call __mkutils_color,\e[1;34m)
-ANSI_COLOR_LIGHT_PURPLE := $(call __mkutils_color,\e[1;35m)
-ANSI_COLOR_LIGHT_CYAN := $(call __mkutils_color,\e[1;36m)
-ANSI_COLOR_WHITE := $(call __mkutils_color,\e[1;37m)
-
-##
-# Colorize $1 $2
-# -----------------------------------------------------------------------------
-# $1 - color name (without ANSI_COLOR_ prefix)
-# $2 - text
-# -----------------------------------------------------------------------------
-# Make $2 $1-colored.
-Colorize = $(ANSI_COLOR_$1)$2$(ANSI_COLOR_OFF)
 
 ##
 # Help to specify the location of tools used by mkutils. TOOLS_PREFIX should
@@ -105,15 +51,36 @@ export WHICH
 PRINTF ?= $(TOOLS_PREFIX)printf$(TOOLS_EXESUFF)
 export PRINTF
 
-# Set default goal's name
-.DEFAULT_GOAL := all
-.PHONY: all
+# Detect if are running under MS Windows
+ifneq ($(PATHEXT),)
+MSWINDOWS ?= 1
+else
+MSWINDOWS ?= 0
+endif
+export MSWINDOWS
+
+# Detect if we are running in interactive shell
+ifneq ($(MSWINDOWS),1)
+  ifeq ($(ISATTY),)
+    $(shell $(TEST) -t 0 >/dev/null 2>&1)
+    ifeq ($(.SHELLSTATUS),0)
+      ISATTY := 1
+    else
+      ISATTY := 0
+    endif
+    export ISATTY
+  endif
+endif
 
 # Auxiliary internal variables
 __mkutils_temp :=
 
+# Set default goal's name
+.DEFAULT_GOAL := all
+.PHONY: all
+
 ## ============================================================================
-## == 1) Boolean operations                                                  ==
+## == 2) Boolean operations                                                  ==
 ## ============================================================================
 
 ##
@@ -135,7 +102,7 @@ Not = $(call Not_,$(strip $1))
 Not_ = $(if $1,,X)
 
 ## ============================================================================
-## == 2) List operations                                                     ==
+## == 3) List operations                                                     ==
 ## ============================================================================
 
 ##
@@ -157,7 +124,7 @@ Tail = $(call Tail_,$(strip $1))
 Tail_ = $(wordlist 2,$(words $1),$1)
 
 ## ============================================================================
-## == 3) Comparations                                                        ==
+## == 4) Comparations                                                        ==
 ## ============================================================================
 
 ##
@@ -233,7 +200,7 @@ NotEqual = $(call NotEqual_,$(strip $1),$(strip $2))
 NotEqual_ = $(subst x$1,,x$2)$(subst x$2,,x$1)
 
 ## ============================================================================
-## == 4) Assertions                                                          ==
+## == 5) Assertions                                                          ==
 ## ============================================================================
 
 ##
@@ -332,7 +299,96 @@ AssertNotEqual_ = $(call Assert_,$(call NotEqual_,$1,$2),$(strip \
 ))
 
 ## ============================================================================
-## == 5) Running programs                                                    ==
+## == 6) Printing                                                            ==
+## ============================================================================
+
+# Detect for coloured output support
+ifneq ($(COLORTERM),)
+__mkutils_color = $1
+else ifneq ($(findstring color,$(TERM)),)
+__mkutils_color = $1
+else ifeq ($(TERM),xterm)
+__mkutils_color = $1
+else ifeq ($(TERM),linux)
+__mkutils_color = $1
+else
+__mkutils_color =
+endif
+
+# Not running in terminal
+ifneq ($(ISATTY),1)
+__mkutils_color =
+endif
+
+# The user has the last word
+ifdef NOCOLORS
+__mkutils_color =
+export NOCOLORS
+endif
+
+# Enable `-e` option for $(ECHO) only if coloring is supported
+__mkutils_echo_e := $(call __mkutils_color,-e)
+
+##
+# ANSI color escape codes to be handled by `$(ECHO) -e`.
+ANSI_COLOR_OFF := $(call __mkutils_color,\e[0m)
+ANSI_COLOR_BLACK := $(call __mkutils_color,\e[0;30m)
+ANSI_COLOR_RED := $(call __mkutils_color,\e[0;31m)
+ANSI_COLOR_GREEN := $(call __mkutils_color,\e[0;32m)
+ANSI_COLOR_BROWN := $(call __mkutils_color,\e[0;33m)
+ANSI_COLOR_BLUE := $(call __mkutils_color,\e[0;34m)
+ANSI_COLOR_PURPLE := $(call __mkutils_color,\e[0;35m)
+ANSI_COLOR_CYAN := $(call __mkutils_color,\e[0;36m)
+ANSI_COLOR_LIGHT_GRAY := $(call __mkutils_color,\e[0;37m)
+ANSI_COLOR_DARK_GRAY := $(call __mkutils_color,\e[1;30m)
+ANSI_COLOR_LIGHT_RED := $(call __mkutils_color,\e[1;31m)
+ANSI_COLOR_LIGHT_GREEN := $(call __mkutils_color,\e[1;32m)
+ANSI_COLOR_YELLOW := $(call __mkutils_color,\e[1;33m)
+ANSI_COLOR_LIGHT_BLUE := $(call __mkutils_color,\e[1;34m)
+ANSI_COLOR_LIGHT_PURPLE := $(call __mkutils_color,\e[1;35m)
+ANSI_COLOR_LIGHT_CYAN := $(call __mkutils_color,\e[1;36m)
+ANSI_COLOR_WHITE := $(call __mkutils_color,\e[1;37m)
+
+##
+# Colorize $1 $2
+# -----------------------------------------------------------------------------
+# $1 - color name without ANSI_COLOR_ prefix
+# $2 - text
+# -----------------------------------------------------------------------------
+# Make $2 $1-colored.
+Colorize = $(ANSI_COLOR_$1)$2$(ANSI_COLOR_OFF)
+
+##
+# Print $1 $2
+# -----------------------------------------------------------------------------
+# $1 - text
+# $2 - additional options to $(ECHO)
+# -----------------------------------------------------------------------------
+# Print $1 to standard error output.
+Print = $(shell $(ECHO) $2 "$1" >&2)
+
+##
+# ColorPrint $1 $2 $3
+# -----------------------------------------------------------------------------
+# $1 - color name without `ANSI_COLOR_` prefix
+# $2 - text
+# $3 - additional options to $(ECHO)
+# -----------------------------------------------------------------------------
+# Print $2 to standard error output colored.
+ColorPrint = $(call Print,$(call Colorize,$1,$2),$(__mkutils_echo_e) $3)
+
+##
+# LightColorPrint $1 $2 $3
+# -----------------------------------------------------------------------------
+# $1 - color name without `ANSI_COLOR_LIGHT_` prefix
+# $2 - text
+# $3 - additional options to $(ECHO)
+# -----------------------------------------------------------------------------
+# Like ColorPrint but use light colors.
+LightColorPrint = $(call ColorPrint,LIGHT_$1,$2,$3)
+
+## ============================================================================
+## == 7) Running programs                                                    ==
 ## ============================================================================
 
 __mkutils_Run_output :=
@@ -342,16 +398,14 @@ __mkutils_Run_exitcode := 0
 # ShowOutput
 # -----------------------------------------------------------------------------
 # Show the output of the last command invoked by Run.
-ShowOutput = $(shell $(ECHO) $(__mkutils_echo_e) \
-    "$(call Colorize,LIGHT_GREEN,$(__mkutils_Run_output))" >&2 \
-)
+ShowOutput = $(call LightColorPrint,GREEN,$(__mkutils_Run_output))
 
 ##
 # ShowExitcode
 # -----------------------------------------------------------------------------
 # Show the exit code of the last command invoked by Run.
-ShowExitcode = $(shell $(ECHO) $(__mkutils_echo_e) \
-    "$(call Colorize,LIGHT_RED,[exit_code = $(__mkutils_Run_exitcode)])" >&2 \
+ShowExitcode = $(call \
+    LightColorPrint,RED,[exit_code = $(__mkutils_Run_exitcode)], \
 )
 
 ##
@@ -458,7 +512,7 @@ FindProgram_ = $(if $1,$(strip \
 FindProgram_a = $(if $(call Which,$1),$1,$(call FindProgram_,$2))
 
 ## ============================================================================
-## == 6) Probing Python interpreter                                          ==
+## == 8) Probing Python interpreter                                          ==
 ## ============================================================================
 
 ##
@@ -499,7 +553,7 @@ NeedPython_h = $(call NeedPython_i,$(strip $1),$(strip $2),$(strip $3))
 NeedPython_i = $(if $1,$(if $2,$(call Ge_,$1$2,$3)))
 
 ## ============================================================================
-## == 7) Targets                                                             ==
+## == 9) Targets                                                             ==
 ## ============================================================================
 
 __mkutils_help_targets :=
@@ -565,7 +619,7 @@ help: help_prologue $$(__mkutils_help_targets) help_epilogue
 endef
 
 ## ============================================================================
-## == 8) Testing                                                             ==
+## == 10) Testing                                                             ==
 ## ============================================================================
 
 __mkutils_passed :=
@@ -608,13 +662,9 @@ endef
 # -----------------------------------------------------------------------------
 # Print info that $1 tests are now running.
 TestInfo = $(strip \
-    $(shell $(ECHO) "" >&2) \
-    $(shell $(ECHO) $(__mkutils_echo_e) \
-        "$(call Colorize,LIGHT_BLUE,Running $1 tests)" >&2 \
-    ) \
-    $(shell $(ECHO) $(__mkutils_echo_e) \
-        "$(call Colorize,LIGHT_BLUE,$(LINE))" >&2 \
-    ) \
+    $(call Print) \
+    $(call LightColorPrint,BLUE,Running $1 tests) \
+    $(call LightColorPrint,BLUE,$(LINE)) \
 )
 
 ##
@@ -626,7 +676,7 @@ TestInfo = $(strip \
 # -----------------------------------------------------------------------------
 # Test whether $1($2) == $3.
 TestFunc1 = $(strip \
-    $(shell $(ECHO) -n "Checking if $1('$2') == '$3': " >&2) \
+    $(call Print,Checking if $1('$2') == '$3': ,-n) \
     $(eval __mkutils_temp := '$(call $1,$2)') \
     $(call __mkutils_eval_test_result,Equal_,'$3') \
 )
@@ -641,7 +691,7 @@ TestFunc1 = $(strip \
 # -----------------------------------------------------------------------------
 # Test whether $1($2, $3) == $4.
 TestFunc2 = $(strip \
-    $(shell $(ECHO) -n "Checking if $1('$2', '$3') == '$4': " >&2) \
+    $(call Print,Checking if $1('$2', '$3') == '$4': ,-n) \
     $(eval __mkutils_temp := '$(call $1,$2,$3)') \
     $(call __mkutils_eval_test_result,Equal_,'$4') \
 )
@@ -657,7 +707,7 @@ TestFunc2 = $(strip \
 # -----------------------------------------------------------------------------
 # Test whether $1($2, $3, $4) == $5.
 TestFunc3 = $(strip \
-    $(shell $(ECHO) -n "Checking if $1('$2', '$3', '$4') == '$5': " >&2) \
+    $(call Print,Checking if $1('$2', '$3', '$4') == '$5': ,-n) \
     $(eval __mkutils_temp := '$(call $1,$2,$3,$4)') \
     $(call __mkutils_eval_test_result,Equal_,'$5') \
 )
@@ -673,13 +723,9 @@ TestFunc3 = $(strip \
 __mkutils_eval_test_result = $(strip \
     $(if $(call $1,$(__mkutils_temp),$2), \
         $(eval __mkutils_passed += x) \
-        $(shell $(ECHO) $(__mkutils_echo_e) \
-            "$(call Colorize,LIGHT_GREEN,OK)" >&2 \
-        ), \
+        $(call LightColorPrint,GREEN,OK), \
         $(eval __mkutils_failed += x) \
-        $(shell $(ECHO) $(__mkutils_echo_e) \
-            "$(call Colorize,LIGHT_RED,ERROR: $(__mkutils_temp) != $2)" >&2 \
-        ) \
+        $(call LightColorPrint,RED,ERROR: $(__mkutils_temp) != $2) \
     ) \
 )
 
