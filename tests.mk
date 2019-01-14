@@ -10,6 +10,9 @@
 
 include $(CURDIR)/mkutils.mk
 
+UPPER := ABCDEFGHIJKLMNOPQRSTUVWXYZ
+LOWER := abcdefghijklmnopqrstuvwxyz
+
 CALL_PROXY := $(MAKE) -f $(CURDIR)/call-proxy.mk
 
 TestAssert = $(strip \
@@ -136,6 +139,23 @@ $(call TestFunc3,Slice, a b c, 3, 1,)
 $(call TestFunc3,Slice, a b c, 4, 2,)
 $(call TestFunc3,Slice, a b c, 5, 3,)
 
+# Strlen
+$(call TestInfo,Strlen)
+$(call TestFunc1,Strlen,,0)
+$(call TestFunc1,Strlen, ,0)
+$(call TestFunc1,Strlen, a ,1)
+$(call TestFunc1,Strlen, a b,3)
+$(call TestFunc1,Strlen,a  b,3)
+$(call TestFunc1,Strlen,abcdef,6)
+
+# ToLower
+$(call TestInfo,ToLower)
+$(call TestFunc1,ToLower,$(UPPER),$(LOWER))
+
+# ToUpper
+$(call TestInfo,ToUpper)
+$(call TestFunc1,ToUpper,$(LOWER),$(UPPER))
+
 # EvalExpr
 $(call TestInfo,EvalExpr)
 $(call TestFunc1,EvalExpr,1 + 2,3)
@@ -235,15 +255,6 @@ $(call TestFunc2,Mod,12,2,0)
 $(call TestFunc2,Mod,25,3,1)
 $(call TestFunc2,Mod,0,12,0)
 $(call TestAssert,Mod,10,0)
-
-# Strlen
-$(call TestInfo,Strlen)
-$(call TestFunc1,Strlen,,0)
-$(call TestFunc1,Strlen, ,0)
-$(call TestFunc1,Strlen, a ,1)
-$(call TestFunc1,Strlen, a b,3)
-$(call TestFunc1,Strlen,a  b,3)
-$(call TestFunc1,Strlen,abcdef,6)
 
 # Eq
 $(call TestInfo,Eq)

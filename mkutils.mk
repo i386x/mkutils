@@ -14,6 +14,9 @@ ifndef __mkutils_version__
 ## == 1) System settings                                                     ==
 ## ============================================================================
 
+# mkutils name
+__mkutils_name__ := mkutils
+
 # mkutils version
 __mkutils_version__ := 0.0.0
 
@@ -79,9 +82,6 @@ ifneq ($(MSWINDOWS),1)
     export ISATTY
   endif
 endif
-
-# Auxiliary internal variables
-__mkutils_temp :=
 
 # Set default goal's name
 .DEFAULT_GOAL := all
@@ -160,7 +160,62 @@ Slice = $(call $(0)_,$(strip $1),$(strip $2),$(strip $3))
 Slice_ = $(wordlist $2,$(if $3,$3,$(words $1)),$1)
 
 ## ============================================================================
-## == 4) Evaluating expressions                                              ==
+## == 4) String services                                                     ==
+## ============================================================================
+
+__mkutils_translate_temp :=
+__mkutils_tolowertab := A,a B,b C,c D,d E,e F,f G,g H,h I,i J,j K,k L,l M,m
+__mkutils_tolowertab += N,n O,o P,p Q,q R,r S,s T,t U,u V,v W,w X,x Y,y Z,z
+__mkutils_touppertab := a,A b,B c,C d,D e,E f,F g,G h,H i,I j,J k,K l,L m,M
+__mkutils_touppertab += n,N o,O p,P q,Q r,R s,S t,T u,U v,V w,W x,X y,Y z,Z
+
+##
+# Strlen $1
+# -----------------------------------------------------------------------------
+# $1 - string
+# -----------------------------------------------------------------------------
+# Return the length of $1 or report an error.
+Strlen = $(call EvalExpr,length "$(strip $1)")
+
+##
+# Translate $1 $2
+# -----------------------------------------------------------------------------
+# $1 - variable name holding the translation table
+# $2 - string
+# -----------------------------------------------------------------------------
+# Translate $2 according to $1. $1 is a name of a variable that holds
+# translation table. A translation table is a list of pairs X,Y (the comma
+# between X and Y is important). Given a pair X,Y from $1, every occurence of
+# X in $2 is substituted by Y.
+Translate = $(strip \
+    $(eval __mkutils_translate_temp := $2) \
+    $(foreach x,$($(strip $1)),$(call $(0)_,$(subst $(,), ,$x))) \
+    $(__mkutils_translate_temp) \
+)
+Translate_ = $(eval \
+    __mkutils_translate_temp := $(subst \
+        $(call Elem_,$1,1),$(call Elem_,$1,2),$(__mkutils_translate_temp) \
+    ) \
+)
+
+##
+# ToLower $1
+# -----------------------------------------------------------------------------
+# $1 - string
+# -----------------------------------------------------------------------------
+# Convert all uppercase letters in $1 to lowercase.
+ToLower = $(call Translate, __mkutils_tolowertab, $1)
+
+##
+# ToUpper $1
+# -----------------------------------------------------------------------------
+# $1 - string
+# -----------------------------------------------------------------------------
+# Convert all lowercase letters in $1 to uppercase.
+ToUpper = $(call Translate, __mkutils_touppertab, $1)
+
+## ============================================================================
+## == 5) Evaluating expressions                                              ==
 ## ============================================================================
 
 # Counters
@@ -288,16 +343,8 @@ Div = $(call AssertNe_,$2,0)$(call EvalExpr,$1 / $2)
 # Return the value of `$1 % $2` or report an error.
 Mod = $(call AssertNe_,$2,0)$(call EvalExpr,$1 % $2)
 
-##
-# Strlen $1
-# -----------------------------------------------------------------------------
-# $1 - string
-# -----------------------------------------------------------------------------
-# Return the length of $1 or report an error.
-Strlen = $(call EvalExpr,length "$(strip $1)")
-
 ## ============================================================================
-## == 5) Comparations                                                        ==
+## == 6) Comparations                                                        ==
 ## ============================================================================
 
 ##
@@ -373,7 +420,7 @@ NotEqual = $(call $(0)_,$(strip $1),$(strip $2))
 NotEqual_ = $(subst x$1,,x$2)$(subst x$2,,x$1)
 
 ## ============================================================================
-## == 6) Assertions                                                          ==
+## == 7) Assertions                                                          ==
 ## ============================================================================
 
 ##
@@ -472,7 +519,7 @@ AssertNotEqual_ = $(call Assert_,$(call NotEqual_,$1,$2),$(strip \
 ))
 
 ## ============================================================================
-## == 7) Printing                                                            ==
+## == 8) Printing                                                            ==
 ## ============================================================================
 
 # Detect for coloured output support
@@ -561,11 +608,12 @@ ColorPrint = $(call Print,$(call Colorize,$1,$2),$(__mkutils_echo_e) $3)
 LightColorPrint = $(call ColorPrint,LIGHT_$1,$2,$3)
 
 ## ============================================================================
-## == 8) Running programs                                                    ==
+## == 9) Running programs                                                    ==
 ## ============================================================================
 
 __mkutils_Run_output :=
 __mkutils_Run_exitcode := 0
+__mkutils_SoftRun_ :=
 
 ##
 # ShowOutput
@@ -603,8 +651,8 @@ Run = $(strip \
 # -----------------------------------------------------------------------------
 # $1 - shell command
 # -----------------------------------------------------------------------------
-# Run $1 quietly. Destroys __mkutils_temp's content.
-SoftRun = $(eval __mkutils_temp := $(shell $1 >/dev/null 2>&1))
+# Run $1 quietly.
+SoftRun = $(eval __mkutils_SoftRun_ := $(shell $1 >/dev/null 2>&1))
 
 ##
 # RunWithHooks $1 $2 $3
@@ -685,7 +733,7 @@ FindProgram_ = $(if $1,$(strip \
 FindProgram_a = $(if $(call Which,$1),$1,$(call FindProgram_,$2))
 
 ## ============================================================================
-## == 9) Probing Python interpreter                                          ==
+## == 10) Probing Python interpreter                                         ==
 ## ============================================================================
 
 ##
@@ -726,9 +774,10 @@ NeedPython_h = $(call NeedPython_i,$(strip $1),$(strip $2),$(strip $3))
 NeedPython_i = $(if $1,$(if $2,$(call Ge_,$1$2,$3)))
 
 ## ============================================================================
-## == 10) Targets                                                            ==
+## == 11) Targets                                                            ==
 ## ============================================================================
 
+__mkutils_help_temp :=
 __mkutils_help_targets :=
 __mkutils_help_env :=
 __mkutils_help_descname :=
@@ -834,16 +883,15 @@ AddToHelpLine = $(strip \
 # Unknown and incomplete commands are treated as ordinary words. Nested lists
 # are not supported for now, the improper use of commands leads to undefined
 # behaviour. If $2 is empty, no new variables are introduced. As a side effect,
-# this macro erase the content of __mkutils_temp and resets __mkutils_counter_a
-# to 0.
+# this macro resets __mkutils_counter_a to 0.
 FormatHelp = $(strip \
-    $(eval __mkutils_temp :=) \
+    $(eval __mkutils_help_temp :=) \
     $(eval __mkutils_help_env :=) \
     $(eval __mkutils_help_descname :=) \
     $(foreach w,$2,$(call $(0)_a,$1,$w)) \
-    $(if $(__mkutils_temp), \
-        $(call AddToHelpLine, $1, $(__mkutils_temp)) \
-        $(eval __mkutils_temp :=) \
+    $(if $(__mkutils_help_temp), \
+        $(call AddToHelpLine, $1, $(__mkutils_help_temp)) \
+        $(eval __mkutils_help_temp :=) \
     ) \
     $(eval __mkutils_help_env :=) \
     $(eval __mkutils_help_descname :=) \
@@ -852,22 +900,22 @@ FormatHelp = $(strip \
 # Note on formatting: read ",$(if ..." as "else if ..." and standalone "," as
 # "else".
 FormatHelp_a = $(strip \
-    $(if $(call Equal_,$(__mkutils_temp),/p), \
+    $(if $(call Equal_,$(__mkutils_help_temp),/p), \
         $(call AddToHelpLine, $1, $2) \
-        $(eval __mkutils_temp :=) \
-    ,$(if $(call Equal_,$(__mkutils_temp),/d), \
+        $(eval __mkutils_help_temp :=) \
+    ,$(if $(call Equal_,$(__mkutils_help_temp),/d), \
         $(call Inc_,a) \
         $(call AddToHelpLine, $1, /d $2) \
         $(eval __mkutils_help_env := /d) \
         $(eval __mkutils_help_descname := $2) \
-        $(eval __mkutils_temp :=) \
-    ,$(if $(call Equal_,$(__mkutils_temp),/i), \
+        $(eval __mkutils_help_temp :=) \
+    ,$(if $(call Equal_,$(__mkutils_help_temp),/i), \
         $(call Inc_,a) \
         $(call UpdatePadding, $2, $(__mkutils_help_descname)) \
         $(call AddToHelpLine, $1, /i $2) \
-        $(eval __mkutils_temp :=) \
+        $(eval __mkutils_help_temp :=) \
     ,$(if $(call Equal_,$2,/p), \
-        $(eval __mkutils_temp := $2) \
+        $(eval __mkutils_help_temp := $2) \
     ,$(if $(call Equal_,$2,/n), \
         $(call Inc_,a) \
     ,$(if $(call Equal_,$2,//), \
@@ -878,10 +926,10 @@ FormatHelp_a = $(strip \
         $(call AddToHelpLine, $1, $2) \
         $(eval __mkutils_help_env := $2) \
     ,$(if $(call Equal_,$2,/d), \
-        $(eval __mkutils_temp := $2) \
+        $(eval __mkutils_help_temp := $2) \
     ,$(if $(call Equal_,$2,/i), \
         $(if $(call Equal_,$(__mkutils_help_env),/d), \
-            $(eval __mkutils_temp := $2) \
+            $(eval __mkutils_help_temp := $2) \
         , \
             $(call Inc_,a) \
             $(call AddToHelpLine, $1, $2) \
@@ -906,7 +954,7 @@ FormatHelp_a = $(strip \
 # From __mkutils_help_$1_lines, generate help-$1-1, help-$1-2, ..., help-$1-N
 # targets that print 1st, 2nd, ..., Nth line from __mkutils_help_$1_lines,
 # respectively. Additionally, generate help-$1 that print all lines from
-# __mkutils_help_$1_lines. May modify __mkutils_temp and __mkutils_counter_b.
+# __mkutils_help_$1_lines. May modify __mkutils_counter_b.
 GenerateHelpLines = $(call $(0)_,$(strip $1))
 GenerateHelpLines_ = $(call GenerateHelpLines_a,$1,$(__mkutils_help_$1_lines))
 GenerateHelpLines_a = $(if $2,$(call GenerateHelpLines_b,$1,$2))
@@ -927,7 +975,7 @@ define GenerateHelpLines_d_ =
 help-$1: $3
 .PHONY: $3
 $2:
-	@$(PRINTF) "  %-$$($4)s - $(subst . ,.  ,$5)\n" "$1"
+	@$$(PRINTF) "  %-$$($4)s - $(subst . ,.  ,$5)\n" "$1"
 endef
 GenerateHelpLines_e = $(call GenerateHelpLines_f,$1,$(subst help-$1-,,$2),$2)
 GenerateHelpLines_f = $(call GenerateHelpLines_g,$3,$(strip \
@@ -941,7 +989,7 @@ GenerateHelpLines_h = $(strip \
         $(eval __mkutils_help_env := $3) \
         $(call GenerateHelpLines_j_1) \
         $(foreach x,$(call Tail_,$2),$(call GenerateHelpLines_j_2,$x)) \
-        $(eval __mkutils_temp :=) \
+        $(eval __mkutils_help_temp :=) \
         $(call GenerateHelpLines_j_3) \
         $(call GenerateHelpLines_j_4,$1,$(__mkutils_help_l_n)) \
     ,$(if $(call Equal_,$3,/d), \
@@ -971,11 +1019,11 @@ GenerateHelpLines_h = $(strip \
 GenerateHelpLines_i = $(eval $(call $(0)_$(if $2,1,2),$1,$2))
 define GenerateHelpLines_i_1 =
 $1:
-	@$(PRINTF) "\n  %-$$(HELP_PADDING)s$(subst . ,.  ,$2)\n" ""
+	@$$(PRINTF) "\n  %-$$(HELP_PADDING)s$(subst . ,.  ,$2)\n" ""
 endef
 define GenerateHelpLines_i_2 =
 $1:
-	@$(ECHO) ""
+	@$$(ECHO) ""
 endef
 GenerateHelpLines_j_1 = $(strip \
     $(eval __mkutils_help_l_i := 2) \
@@ -985,34 +1033,34 @@ GenerateHelpLines_j_1 = $(strip \
     $(eval __mkutils_help_l_t := 4) \
     $(eval __mkutils_help_l_n :=) \
     $(eval __mkutils_help_l_g = $$(__mkutils_help_l_s)) \
-    $(eval __mkutils_temp :=) \
+    $(eval __mkutils_help_temp :=) \
     $(call Reset_,b) \
 )
 GenerateHelpLines_j_2 = $(strip \
-    $(if $(call Equal_,$(__mkutils_temp),-i), \
+    $(if $(call Equal_,$(__mkutils_help_temp),-i), \
         $(eval __mkutils_help_l_i := $1) \
-        $(eval __mkutils_temp :=) \
-    ,$(if $(call Equal_,$(__mkutils_temp),-w), \
+        $(eval __mkutils_help_temp :=) \
+    ,$(if $(call Equal_,$(__mkutils_help_temp),-w), \
         $(eval __mkutils_help_l_w := $1) \
-        $(eval __mkutils_temp :=) \
-    ,$(if $(call Equal_,$(__mkutils_temp),-s), \
+        $(eval __mkutils_help_temp :=) \
+    ,$(if $(call Equal_,$(__mkutils_help_temp),-s), \
         $(eval __mkutils_help_l_s := $1) \
-        $(eval __mkutils_temp :=) \
-    ,$(if $(call Equal_,$(__mkutils_temp),-t), \
+        $(eval __mkutils_help_temp :=) \
+    ,$(if $(call Equal_,$(__mkutils_help_temp),-t), \
         $(eval __mkutils_help_l_t := $1) \
-        $(eval __mkutils_temp :=) \
+        $(eval __mkutils_help_temp :=) \
     ,$(if $(call Equal_,$1,-i), \
-        $(eval __mkutils_temp := $1) \
+        $(eval __mkutils_help_temp := $1) \
     ,$(if $(call Equal_,$1,-w), \
-        $(eval __mkutils_temp := $1) \
+        $(eval __mkutils_help_temp := $1) \
     ,$(if $(call Equal_,$1,-s), \
-        $(eval __mkutils_temp := $1) \
+        $(eval __mkutils_help_temp := $1) \
     ,$(if $(call Equal_,$1,-l), \
         $(eval __mkutils_help_l_j := -) \
     ,$(if $(call Equal_,$1,-r), \
         $(eval __mkutils_help_l_j :=) \
     ,$(if $(call Equal_,$1,-t), \
-        $(eval __mkutils_temp := $1) \
+        $(eval __mkutils_help_temp := $1) \
     ,$(if $(call Equal_,$1,-n), \
         $(eval __mkutils_help_l_n := n) \
     ))))))))))) \
@@ -1037,11 +1085,11 @@ GenerateHelpLines_j_3 = $(strip \
 GenerateHelpLines_j_4 = $(eval $(call $(0)_$2,$1))
 define GenerateHelpLines_j_4_ =
 $1:
-	@$(ECHO) ""
+	@$$(ECHO) ""
 endef
 define GenerateHelpLines_j_4_n =
 $1:
-	@$(TRUE) ""
+	@$$(TRUE) ""
 endef
 GenerateHelpLines_j_5 = $(subst $1,$(call $(strip $2)),$(__mkutils_help_l_s))
 GenerateHelpLines_j_6 = $(call Value, b)
@@ -1054,14 +1102,14 @@ GenerateHelpLines_j_8 = $(word $(call Value, b), \
 GenerateHelpLines_k = $(eval $(call $(0)_,$1))
 define GenerateHelpLines_k_ =
 $1:
-	@$(ECHO) ""
+	@$$(ECHO) ""
 endef
 GenerateHelpLines_l_1 = $(eval $(call $(0)_,$1,$2,$3,HELP_PADDING,$(strip \
     HELP_$(__mkutils_help_descname)_FIRSTCOLWIDTH \
 )))
 define GenerateHelpLines_l_1_ =
 $1:
-	@$(PRINTF) "  %-$$($4)s  %-$$($5)s - $(subst . ,.  ,$(strip $3))\n" \
+	@$$(PRINTF) "  %-$$($4)s  %-$$($5)s - $(subst . ,.  ,$(strip $3))\n" \
 	           "" "$(strip $2)"
 endef
 GenerateHelpLines_l_2 = $(eval $(call $(0)_,$1,$2,HELP_PADDING,$(call \
@@ -1070,7 +1118,7 @@ GenerateHelpLines_l_2 = $(eval $(call $(0)_,$1,$2,HELP_PADDING,$(call \
 ))
 define GenerateHelpLines_l_2_ =
 $1:
-	@$(PRINTF) "  %-$$($3)s$(4)%$(5)$(6)s $(subst . ,.  ,$2)\n" \
+	@$$(PRINTF) "  %-$$($3)s$(4)%$(5)$(6)s $(subst . ,.  ,$2)\n" \
 	           "" $(if $4,"") "$7"
 endef
 GenerateHelpLines_l_3 = $(strip \
@@ -1090,7 +1138,7 @@ GenerateHelpLines_m = $(strip \
 GenerateHelpLines_m_1 = $(eval $(call $(0)_,$1,$2,$3,$4))
 define GenerateHelpLines_m_1_ =
 $1:
-	@$(PRINTF) "  %-$$($3)s  %-$$($4)s$(subst . ,.  ,$2)\n" "" ""
+	@$$(PRINTF) "  %-$$($3)s  %-$$($4)s$(subst . ,.  ,$2)\n" "" ""
 endef
 GenerateHelpLines_m_2 = $(call \
     GenerateHelpLines_m_$(if $(call Gt_,$4,0),4,3),$1,$2,$3,$4, \
@@ -1098,33 +1146,33 @@ GenerateHelpLines_m_2 = $(call \
 GenerateHelpLines_m_3 = $(eval $(call $(0)_,$1,$2,$3))
 define GenerateHelpLines_m_3_ =
 $1:
-	@$(PRINTF) "  %-$$($3)s$(subst . ,.  ,$2)\n" ""
+	@$$(PRINTF) "  %-$$($3)s$(subst . ,.  ,$2)\n" ""
 endef
 GenerateHelpLines_m_4 = $(eval $(call $(0)_,$1,$2,$3,$4))
 define GenerateHelpLines_m_4_ =
 $1:
-	@$(PRINTF) "  %-$$($3)s%-$(4)s$(subst . ,.  ,$2)\n" "" ""
+	@$$(PRINTF) "  %-$$($3)s%-$(4)s$(subst . ,.  ,$2)\n" "" ""
 endef
 GenerateHelpLines_n = $(call $(0)_1_$(call $(0)_2)$(if $2,y,n),$1,$2)
 GenerateHelpLines_n_1_nn = $(eval $(call $(0)_,$1,$2))
 define GenerateHelpLines_n_1_nn_ =
 $1:
-	@$(TRUE)
+	@$$(TRUE)
 endef
 GenerateHelpLines_n_1_yn = $(eval $(call $(0)_,$1,$2))
 define GenerateHelpLines_n_1_yn_ =
 $1:
-	@$(ECHO) ""
+	@$$(ECHO) ""
 endef
 GenerateHelpLines_n_1_ny = $(eval $(call $(0)_,$1,$2))
 define GenerateHelpLines_n_1_ny_ =
 $1:
-	@$(PRINTF) "  %-$$(HELP_PADDING)s$(subst . ,.  ,$2)\n" ""
+	@$$(PRINTF) "  %-$$(HELP_PADDING)s$(subst . ,.  ,$2)\n" ""
 endef
 GenerateHelpLines_n_1_yy = $(eval $(call $(0)_,$1,$2))
 define GenerateHelpLines_n_1_yy_ =
 $1:
-	@$(PRINTF) "\n  %-$$(HELP_PADDING)s$(subst . ,.  ,$2)\n" ""
+	@$$(PRINTF) "\n  %-$$(HELP_PADDING)s$(subst . ,.  ,$2)\n" ""
 endef
 GenerateHelpLines_n_2 = $(strip \
     $(if $(call Equal_,$(__mkutils_help_env),/d), \
@@ -1134,7 +1182,7 @@ GenerateHelpLines_n_2 = $(strip \
 GenerateHelpLines_o = $(eval $(call $(0)_,$1,$2,HELP_PADDING))
 define GenerateHelpLines_o_ =
 $1:
-	@$(PRINTF) "  %-$$($3)s$(subst . ,.  ,$2)\n" ""
+	@$$(PRINTF) "  %-$$($3)s$(subst . ,.  ,$2)\n" ""
 endef
 
 ##
@@ -1160,6 +1208,41 @@ $(call GenerateHelpLines, $1)
 endef
 
 ##
+# TargetW $1 $2
+# -----------------------------------------------------------------------------
+# $1 - target name
+# $2 - help text
+# -----------------------------------------------------------------------------
+# Define $1 with help $2 only if MS Windows environment was detected.
+TargetW = $(call $(0)_$(MSWINDOWS),$1,$2)
+TargetW_0 = $(eval $(call $(0)_,$(strip $1)))$(strip $1)::
+define TargetW_0_ =
+.PHONY: $1
+$1::
+	@$$(ECHO) "Option $1 is available only on MS Windows"
+	@$$(FALSE)
+endef
+TargetW_1 = $(call Target,$1,$2)
+
+##
+# TargetX $1 $2
+# -----------------------------------------------------------------------------
+# $1 - target name
+# $2 - help text
+# -----------------------------------------------------------------------------
+# Define $1 with help $2 only if other than MS Windows environment was
+# detected.
+TargetX = $(call $(0)_$(MSWINDOWS),$1,$2)
+TargetX_0 = $(call Target,$1,$2)
+TargetX_1 = $(eval $(call $(0)_,$(strip $1)))$(strip $1)::
+define TargetX_1_ =
+.PHONY: $1
+$1::
+	@$$(ECHO) "Option $1 is not supported on MS Windows"
+	@$$(FALSE)
+endef
+
+##
 # GenerateHelp
 # -----------------------------------------------------------------------------
 # Define `help` target that prints help for all targets defined by Target.
@@ -1169,32 +1252,115 @@ __mkutils_help_targets += help-help
 __mkutils_help_targets := $$(sort $$(__mkutils_help_targets))
 .PHONY: help-help
 help-help:
-	@$(PRINTF) "  %-$$(HELP_FIRSTCOLWIDTH)s - print this help\n" help
+	@$$(PRINTF) "  %-$$(HELP_FIRSTCOLWIDTH)s - print this help\n" help
 .PHONY: help_prologue
 help_prologue:
-	@$(ECHO) "Usage: $(MAKE) <target>"
-	@$(ECHO) "where <target> is one of"
-	@$(ECHO) ""
+	@$$(ECHO) "Usage: $(MAKE) <target> [settings]"
+	@$$(ECHO) "where <target> is one of"
+	@$$(ECHO) ""
 .PHONY: help_epilogue
 help_epilogue:
-	@$(ECHO) ""
+	@$$(ECHO) ""
+	@$$(ECHO) "and settings are of the for NAME1=VALUE1 NAME2=VALUE2 etc."
+	@$$(ECHO) "By default, $(__mkutils_name__) supports these settings:"
+	@$$(ECHO) ""
+	@$$(ECHO) "  ECHO=PATH"
+	@$$(ECHO) "      [default: $(call ShowVar, ECHO)]"
+	@$$(ECHO) "      override the path to 'echo'; the new 'echo' should at"
+	@$$(ECHO) "      least support -n and -e options"
+	@$$(ECHO) "  EXESUFF=SUFFIX"
+	@$$(ECHO) "      [default: $(call ShowVar, EXESUFF)]"
+	@$$(ECHO) "      specify the suffix of executables used by"
+	@$$(ECHO) "      $(__mkutils_name__) (e.g. '.py')"
+	@$$(ECHO) "  EXPR=PATH"
+	@$$(ECHO) "      [default: $(call ShowVar, EXPR)]"
+	@$$(ECHO) \
+	"      override the path to 'expr'; the new 'expr' should be"
+	@$$(ECHO) \
+	"      compatible with POSIX 'expr' plus should support 'length'"
+	@$$(ECHO) \
+	"      operator; at least, these operators should be implemented:"
+	@$$(ECHO) "      +, -, *, /, %, length"
+	@$$(ECHO) "  FALSE=PATH"
+	@$$(ECHO) "      [default: $(call ShowVar, FALSE)]"
+	@$$(ECHO) "      override the path to 'false'; the new 'false' should"
+	@$$(ECHO) "      be compatible with POSIX 'false'"
+	@$$(ECHO) "  ISATTY=[0|1]"
+	@$$(ECHO) "      [default: $(call ShowVar, ISATTY)]"
+	@$$(ECHO) "      set to 1 if $(MAKE) is run from terminal"
+	@$$(ECHO) "  MSWINDOWS=[0|1]"
+	@$$(ECHO) "      [default: $(call ShowVar, MSWINDOWS)]"
+	@$$(ECHO) "      set to 1 if the environment is MS Windows specific"
+	@$$(ECHO) "  NOCOLORS=VALUE"
+	@$$(ECHO) "      [default: $(call ShowVar, NOCOLORS)]"
+	@$$(ECHO) \
+	"      define NOCOLORS to be an arbitrary value if colors should be"
+	@$$(ECHO) "      disabled while displaying the messages"
+	@$$(ECHO) "  PREFIX=PATH"
+	@$$(ECHO) "      [default: $(call ShowVar, PREFIX)]"
+	@$$(ECHO) "      specify the path to the directory with executables"
+	@$$(ECHO) \
+	"      used by $(__mkutils_name__); without PREFIX, executables are"
+	@$$(ECHO) "      searched in system default locations"
+	@$$(ECHO) "  PRINTF=PATH"
+	@$$(ECHO) "      [default: $(call ShowVar, PRINTF)]"
+	@$$(ECHO) \
+	"      override the path to 'printf'; the new 'printf' should be"
+	@$$(ECHO) \
+	"      compatible with POSIX 'printf'; at least, the format string"
+	@$$(ECHO) \
+	"      should support left-justify flag (-), field width, 's' (string)"
+	@$$(ECHO) \
+	"      conversion specifier and new-line escape sequence (\n)"
+	@$$(ECHO) "  TEST=PATH"
+	@$$(ECHO) "      [default: $(call ShowVar, TEST)]"
+	@$$(ECHO) "      override the path to 'test'; the new 'test' should be"
+	@$$(ECHO) \
+	"      compatible with POSIX 'test'; at least, 'test' should support"
+	@$$(ECHO) "      -t, -eq, -ne, -lt, -gt, -le, -ge options"
+	@$$(ECHO) "  TOOLS_EXESUFF=SUFFIX"
+	@$$(ECHO) "      [default: $(call ShowVar, TOOLS_EXESUFF)]"
+	@$$(ECHO) \
+	"      specify the suffix of tools used by $(__mkutils_name__); the"
+	@$$(ECHO) "      default value of SUFFIX is read from EXESUFF variable"
+	@$$(ECHO) "  TOOLS_PREFIX=PATH"
+	@$$(ECHO) "      [default: $(call ShowVar, TOOLS_PREFIX)]"
+	@$$(ECHO) "      specify the path to the directory with tools used"
+	@$$(ECHO) \
+	"      by $(__mkutils_name__); the default value of PATH is read from"
+	@$$(ECHO) "      PREFIX variable"
+	@$$(ECHO) "  TRUE=PATH"
+	@$$(ECHO) "      [default: $(call ShowVar, TRUE)]"
+	@$$(ECHO) "      override the path to 'true'; the new 'true' should be"
+	@$$(ECHO) "      compatible with POSIX 'true'"
+	@$$(ECHO) "  WHICH=PATH"
+	@$$(ECHO) "      [default: $(call ShowVar, WHICH)]"
+	@$$(ECHO) \
+	"      override the path to 'which'; 'which foo' should print the path"
+	@$$(ECHO) \
+	"      to 'foo' to stdout if 'foo' exists in standard system location"
+	@$$(ECHO) \
+	"      for executables and return 0 or return 1 if 'foo' cannot be"
+	@$$(ECHO) "      found"
+	@$$(ECHO) ""
 .PHONY: help
 help: help_prologue $$(__mkutils_help_targets) help_epilogue
 endef
 
 ## ============================================================================
-## == 11) Testing                                                            ==
+## == 12) Testing                                                            ==
 ## ============================================================================
 
+__mkutils_test_temp :=
 __mkutils_passed :=
 __mkutils_failed :=
 
 ##
 # TestsBegin
 # -----------------------------------------------------------------------------
-# Prepare for running the tests. Clears __mkutils_temp.
+# Prepare for running the tests.
 TestsBegin = $(strip \
-    $(eval __mkutils_temp :=) \
+    $(eval __mkutils_test_temp :=) \
     $(eval __mkutils_passed :=) \
     $(eval __mkutils_failed :=) \
 )
@@ -1206,15 +1372,16 @@ TestsBegin = $(strip \
 TestsEnd = $(eval $(call $(0)_))
 define TestsEnd_ =
 all:
-	@$(ECHO) ""
-	@$(ECHO) $(__mkutils_echo_e) "$(call Colorize,LIGHT_CYAN,Test Results)"
-	@$(ECHO) $(__mkutils_echo_e) "$(call Colorize,LIGHT_CYAN,$(DLINE))"
-	@$(ECHO) $(__mkutils_echo_e) \
+	@$$(ECHO) ""
+	@$$(ECHO) $(__mkutils_echo_e) \
+	"$(call Colorize,LIGHT_CYAN,Test Results)"
+	@$$(ECHO) $(__mkutils_echo_e) "$(call Colorize,LIGHT_CYAN,$(DLINE))"
+	@$$(ECHO) $(__mkutils_echo_e) \
         "$(call Colorize,LIGHT_GREEN,Passed: $(words $(__mkutils_passed)))"
-	@$(ECHO) $(__mkutils_echo_e) \
+	@$$(ECHO) $(__mkutils_echo_e) \
         "$(call Colorize,LIGHT_RED,Failed: $(words $(__mkutils_failed)))"
-	@$(ECHO) $(__mkutils_echo_e) "$(call Colorize,LIGHT_CYAN,$(LINE))"
-	@$(ECHO) $(__mkutils_echo_e) \
+	@$$(ECHO) $(__mkutils_echo_e) "$(call Colorize,LIGHT_CYAN,$(LINE))"
+	@$$(ECHO) $(__mkutils_echo_e) \
         "$(call Colorize,YELLOW,Total: $(words \
             $(__mkutils_passed) $(__mkutils_failed) \
         ))"
@@ -1239,10 +1406,10 @@ TestInfo = $(strip \
 # $2 - 1st argument
 # $3 - expected result
 # -----------------------------------------------------------------------------
-# Test whether $1($2) == $3. Modifies __mkutils_temp.
+# Test whether $1($2) == $3.
 TestFunc1 = $(strip \
     $(call Print,Checking if $1('$2') == '$3': ,-n) \
-    $(eval __mkutils_temp := '$(call $1,$2)') \
+    $(eval __mkutils_test_temp := '$(call $1,$2)') \
     $(call __mkutils_eval_test_result,Equal_,'$3') \
 )
 
@@ -1254,10 +1421,10 @@ TestFunc1 = $(strip \
 # $3 - 2nd argument
 # $4 - expected result
 # -----------------------------------------------------------------------------
-# Test whether $1($2, $3) == $4. Modifies __mkutils_temp.
+# Test whether $1($2, $3) == $4.
 TestFunc2 = $(strip \
     $(call Print,Checking if $1('$2', '$3') == '$4': ,-n) \
-    $(eval __mkutils_temp := '$(call $1,$2,$3)') \
+    $(eval __mkutils_test_temp := '$(call $1,$2,$3)') \
     $(call __mkutils_eval_test_result,Equal_,'$4') \
 )
 
@@ -1270,10 +1437,10 @@ TestFunc2 = $(strip \
 # $4 - 3rd argument
 # $5 - expected result
 # -----------------------------------------------------------------------------
-# Test whether $1($2, $3, $4) == $5. Modifies __mkutils_temp.
+# Test whether $1($2, $3, $4) == $5.
 TestFunc3 = $(strip \
     $(call Print,Checking if $1('$2', '$3', '$4') == '$5': ,-n) \
-    $(eval __mkutils_temp := '$(call $1,$2,$3,$4)') \
+    $(eval __mkutils_test_temp := '$(call $1,$2,$3,$4)') \
     $(call __mkutils_eval_test_result,Equal_,'$5') \
 )
 
@@ -1283,15 +1450,156 @@ TestFunc3 = $(strip \
 # $1 - comparison function
 # $2 - expected result
 # -----------------------------------------------------------------------------
-# Evaluate test as successful if $1($(__mkutils_temp), $2) is true. Otherwise,
-# test is evaluated as failed. For internal use only.
+# Evaluate test as successful if $1($(__mkutils_test_temp), $2) is true.
+# Otherwise, test is evaluated as failed. For internal use only.
 __mkutils_eval_test_result = $(strip \
-    $(if $(call $1,$(__mkutils_temp),$2), \
+    $(if $(call $1,$(__mkutils_test_temp),$2), \
         $(eval __mkutils_passed += x) \
         $(call LightColorPrint,GREEN,OK), \
         $(eval __mkutils_failed += x) \
-        $(call LightColorPrint,RED,ERROR: $(__mkutils_temp) != $2) \
+        $(call LightColorPrint,RED,ERROR: $(__mkutils_test_temp) != $2) \
     ) \
 )
+
+## ============================================================================
+## == 13) Managing variables                                                 ==
+## ============================================================================
+
+##
+# ShowVar $1
+# -----------------------------------------------------------------------------
+# $1 - variable name
+# -----------------------------------------------------------------------------
+# Show $1's value.
+ShowVar = $(call $(0)_,$(strip $1))
+ShowVar_ = $(if $(call Equal_,$(origin $1),undefined),undefined,'$($1)')
+
+##
+# AddTool $1 $2
+# -----------------------------------------------------------------------------
+# $1 - tool name (should be name of the binary without suffix)
+# $2 - variable name
+# -----------------------------------------------------------------------------
+# Add tool $1 to Makefile. The added tool is accessible through $2. If $2 is
+# not given, uppercased $1 is used.
+AddTool = $(call $(0)_,$(strip $1),$(strip $2))
+AddTool_ = $(eval \
+    $(if $2,$2,$(call ToUpper,$1)) ?= $$(TOOLS_PREFIX)$(1)$$(TOOLS_EXESUFF) \
+)
+
+##
+# AddToolW $1 $2
+# -----------------------------------------------------------------------------
+# $1 - tool name (should be name of the binary without suffix)
+# $2 - variable name
+# -----------------------------------------------------------------------------
+# Invoke AddTool only if MS Windows environment was detected.
+AddToolW = $(call $(0)_$(MSWINDOWS),$1,$2)
+AddToolW_0 =
+AddToolW_1 = $(call AddTool,$1,$2)
+
+##
+# AddToolX $1 $2
+# -----------------------------------------------------------------------------
+# $1 - tool name (should be name of the binary without suffix)
+# $2 - variable name
+# -----------------------------------------------------------------------------
+# Invoke AddTool only if other than MS Windows environment was detected.
+AddToolX = $(call $(0)_$(MSWINDOWS),$1,$2)
+AddToolX_0 = $(call AddTool,$1,$2)
+AddToolX_1 =
+
+##
+# AddVar $1 $2
+# -----------------------------------------------------------------------------
+# $1 - variable name
+# $2 - value
+# -----------------------------------------------------------------------------
+# Define $1 with $2 as its value if $1 was not previously defined.
+AddVar = $(eval $1 ?= $2)
+
+##
+# AddVarW $1 $2
+# -----------------------------------------------------------------------------
+# $1 - variable name
+# $2 - value
+# -----------------------------------------------------------------------------
+# Invoke AddVar only if MS Windows environment was detected.
+AddVarW = $(call $(0)_$(MSWINDOWS),$1,$2)
+AddVarW_0 =
+AddVarW_1 = $(call AddVar,$1,$2)
+
+##
+# AddVarX $1 $2
+# -----------------------------------------------------------------------------
+# $1 - variable name
+# $2 - value
+# -----------------------------------------------------------------------------
+# Invoke AddVar only if other than MS Windows environment was detected.
+AddVarX = $(call $(0)_$(MSWINDOWS),$1,$2)
+AddVarX_0 = $(call AddVar,$1,$2)
+AddVarX_1 =
+
+##
+# DefVar $1 $2
+# -----------------------------------------------------------------------------
+# $1 - variable name
+# $2 - value
+# -----------------------------------------------------------------------------
+# Define $1 with $2 as its value.
+DefVar = $(eval $1 = $2)
+
+##
+# DefVarW $1 $2
+# -----------------------------------------------------------------------------
+# $1 - variable name
+# $2 - value
+# -----------------------------------------------------------------------------
+# Invoke DefVar only if MS Windows environment was detected.
+DefVarW = $(call $(0)_$(MSWINDOWS),$1,$2)
+DefVarW_0 =
+DefVarW_1 = $(call DefVar,$1,$2)
+
+##
+# DefVarX $1 $2
+# -----------------------------------------------------------------------------
+# $1 - variable name
+# $2 - value
+# -----------------------------------------------------------------------------
+# Invoke DefVar only if other than MS Windows environment was detected.
+DefVarX = $(call $(0)_$(MSWINDOWS),$1,$2)
+DefVarX_0 = $(call DefVar,$1,$2)
+DefVarX_1 =
+
+##
+# SetVar $1 $2
+# -----------------------------------------------------------------------------
+# $1 - variable name
+# $2 - value
+# -----------------------------------------------------------------------------
+# Evaluate $2 and assing the result to $1.
+SetVar = $(eval $1 := $2)
+
+##
+# SetVarW $1 $2
+# -----------------------------------------------------------------------------
+# $1 - variable name
+# $2 - value
+# -----------------------------------------------------------------------------
+# Invoke SetVar only if MS Windows environment was detected.
+SetVarW = $(call $(0)_$(MSWINDOWS),$1,$2)
+SetVarW_0 =
+SetVarW_1 = $(call SetVar,$1,$2)
+
+##
+# SetVarX $1 $2
+# -----------------------------------------------------------------------------
+# $1 - variable name
+# $2 - value
+# -----------------------------------------------------------------------------
+# Invoke SetVar only if other than MS Windows environment was detected.
+SetVarX = $(call $(0)_$(MSWINDOWS),$1,$2)
+SetVarX_0 = $(call SetVar,$1,$2)
+SetVarX_1 =
 
 endif

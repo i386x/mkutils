@@ -10,35 +10,40 @@
 
 include $(CURDIR)/mkutils.mk
 
-NAME = mkutils
+NAME = $(__mkutils_name__)
 INCFILE := $(NAME).mk
 
-ifneq ($(MSWINDOWS),1)
-CHMOD ?= $(TOOLS_PREFIX)chmod$(TOOLS_EXESUFF)
-MKDIR ?= $(TOOLS_PREFIX)mkdir$(TOOLS_EXESUFF)
-endif
-SED ?= $(TOOLS_PREFIX)sed$(TOOLS_EXESUFF)
+$(call AddToolX, chmod)
+$(call AddToolX, mkdir)
+$(call AddTool, sed)
 
-ifneq ($(MSWINDOWS),1)
-prefix ?= /usr/local
-bindir = $(prefix)/bin
-includedir = $(prefix)/include
-endif
+$(call AddVarX, prefix, /usr/local)
+$(call DefVarX, bindir, $$(prefix)/bin)
+$(call DefVarX, includedir, $$(prefix)/include)
 
-HELP_FIRSTCOLWIDTH := 9
 $(call DefaultTarget, help)
 
-ifneq ($(MSWINDOWS),1)
-INCDIR := $(includedir)/$(NAME)
-INCPATH := $(INCDIR)/$(INCFILE)
-BUNDLESCRIPTFILE := $(NAME)-bundle
-BUNDLESCRIPTPATH := $(bindir)/$(BUNDLESCRIPTFILE)
-endif
+$(call SetVarX, INCDIR, $$(includedir)/$$(NAME))
+$(call SetVarX, INCPATH, $$(INCDIR)/$$(INCFILE))
+$(call SetVarX, BUNDLESCRIPTFILE, $$(NAME)-bundle)
+$(call SetVarX, BUNDLESCRIPTPATH, $$(bindir)/$$(BUNDLESCRIPTFILE))
 
 EDIT := $(SED) -e 's,^\#! \\file    ~/$(INCFILE)$$,\#! \\file    $(INCFILE),g'
 
-ifneq ($(MSWINDOWS),1)
-$(call Target, install, install mkutils)
+$(call TargetX, install, \
+    install $(NAME); supported settings are \
+    /l -n -i 0 \
+    /i prefix=PATH \
+    /| [$(prefix)] \
+    /| specify the installation prefix \
+    /i bindir=PATH \
+    /| [$(bindir)] \
+    /| where to install binaries \
+    /i includedir=PATH \
+    /| [$(includedir)] \
+    /| where to install $(INCFILE) \
+    /e \
+)
 	$(MKDIR) -p $(INCDIR)
 	$(EDIT) $(CURDIR)/$(INCFILE) > $(INCPATH)
 	$(CHMOD) 644 $(INCPATH)
@@ -65,15 +70,42 @@ $(call Target, install, install mkutils)
 	) > $(BUNDLESCRIPTPATH)
 	$(CHMOD) 755 $(BUNDLESCRIPTPATH)
 
-$(call Target, uninstall, uninstall mkutils)
+$(call TargetX, uninstall, \
+    uninstall $(NAME); supported settings are \
+    /l -n -i 0 \
+    /i prefix=PATH \
+    /| [$(prefix)] \
+    /| specify the installation prefix of installed files and directories \
+    /i bindir=PATH \
+    /| [$(bindir)] \
+    /| where the binaries are installed \
+    /i includedir=PATH \
+    /| [$(includedir)] \
+    /| where the $(INCFILE) is installed \
+    /e \
+)
 	$(RM) -rfd $(INCDIR)
 	$(RM) -f $(BUNDLESCRIPTPATH)
+
+DEST ?= $(CURDIR)
+
+$(call Target, bundle, \
+    bundle $(NAME) to an existing project; $(INCFILE) is copied and edited /n \
+    to the location specified by DEST; supported settings are \
+    /l -n -i 0 \
+    /i DEST=PATH \
+    /| [$(DEST)] \
+    /| where to copy and edit $(INCFILE) \
+    /e \
+)
+ifeq ($(DEST),$(CURDIR))
+	@$(ECHO) "Please set DEST to be not the source location."
+	@$(FALSE)
+else
+	$(EDIT) $(CURDIR)/$(INCFILE) > $(DEST)/$(INCFILE)
 endif
 
-$(call Target, bundle, bundle mkutils to an existing project)
-	$(EDIT) $(CURDIR)/$(INCFILE) > $(DEST)/$(INCFILE)
-
-$(call Target, test, run test suite)
+$(call Target, test, run the test suite)
 	$(MAKE) -f $(CURDIR)/tests.mk
 
 $(call GenerateHelp)
