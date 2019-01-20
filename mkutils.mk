@@ -1261,7 +1261,8 @@ help_prologue:
 .PHONY: help_epilogue
 help_epilogue:
 	@$$(ECHO) ""
-	@$$(ECHO) "and settings are of the for NAME1=VALUE1 NAME2=VALUE2 etc."
+	@$$(ECHO) "and settings are of the form NAME1=VALUE1 NAME2=VALUE2 etc."
+ifneq ($V,)
 	@$$(ECHO) "By default, $(__mkutils_name__) supports these settings:"
 	@$$(ECHO) ""
 	@$$(ECHO) "  ECHO=PATH"
@@ -1333,6 +1334,11 @@ help_epilogue:
 	@$$(ECHO) "      [default: $(call ShowVar, TRUE)]"
 	@$$(ECHO) "      override the path to 'true'; the new 'true' should be"
 	@$$(ECHO) "      compatible with POSIX 'true'"
+	@$$(ECHO) "  V=VALUE"
+	@$$(ECHO) "      [default: $(call ShowVar, V)]"
+	@$$(ECHO) \
+	"      define V to be an arbitrary value if more help should be"
+	@$$(ECHO) "      displayed"
 	@$$(ECHO) "  WHICH=PATH"
 	@$$(ECHO) "      [default: $(call ShowVar, WHICH)]"
 	@$$(ECHO) \
@@ -1342,6 +1348,9 @@ help_epilogue:
 	@$$(ECHO) \
 	"      for executables and return 0 or return 1 if 'foo' cannot be"
 	@$$(ECHO) "      found"
+else
+	@$$(ECHO) "For more help, set V to an arbitrary value."
+endif
 	@$$(ECHO) ""
 .PHONY: help
 help: help_prologue $$(__mkutils_help_targets) help_epilogue
