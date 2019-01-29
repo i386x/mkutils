@@ -215,7 +215,241 @@ ToLower = $(call Translate, __mkutils_tolowertab, $1)
 ToUpper = $(call Translate, __mkutils_touppertab, $1)
 
 ## ============================================================================
-## == 5) Evaluating expressions                                              ==
+## == 5) Hashing                                                             ==
+## ============================================================================
+
+##
+# MakeMap $1
+# -----------------------------------------------------------------------------
+# $1 - map name
+# -----------------------------------------------------------------------------
+# Create a map under the name $1.
+MakeMap = $(eval __mkutils_map_$(strip $1)_keys :=)
+
+##
+# MapKeys $1
+# -----------------------------------------------------------------------------
+# $1 - map name
+# -----------------------------------------------------------------------------
+# Return the list of keys of $1.
+MapKeys = $(__mkutils_map_$(strip $1)_keys)
+
+##
+# MapSize $1
+# -----------------------------------------------------------------------------
+# $1 - map name
+# -----------------------------------------------------------------------------
+# Return the number of items in $1.
+MapSize = $(words $(call MapKeys, $1))
+
+##
+# KVSetKey $1 $2 $3
+# -----------------------------------------------------------------------------
+# $1 - map name
+# $2 - key
+# $3 - value
+# -----------------------------------------------------------------------------
+# Store $3 to $1 under the $2. Low-level routine.
+KVSetKey = $(eval __mkutils_map_$1[$2] := $3)
+
+##
+# KVGetKey $1 $2
+# -----------------------------------------------------------------------------
+# $1 - map name
+# $2 - key
+# -----------------------------------------------------------------------------
+# Get the value stored under the key $2 in $1. Low-level routine.
+KVGetKey = $(__mkutils_map_$1[$2])
+
+##
+# KVHasKey $1 $2
+# -----------------------------------------------------------------------------
+# $1 - map name
+# $2 - key
+# -----------------------------------------------------------------------------
+# Return true if $2 is in $1. Low-level routine.
+KVHasKey = $(if $2,$(filter $2,$(call MapKeys, $1)))
+
+##
+# KVAddKey $1 $2
+# -----------------------------------------------------------------------------
+# $1 - map name
+# $2 - key
+# -----------------------------------------------------------------------------
+# Add key $2 to $1, but do not associate $2 with any value (the former
+# associations remain untouched). Low-level routine.
+KVAddKey = $(if $(call KVHasKey,$1,$2),,$(eval __mkutils_map_$1_keys += $2))
+
+##
+# KVTagKey $1 $2
+# -----------------------------------------------------------------------------
+# $1 - map name
+# $2 - key
+# -----------------------------------------------------------------------------
+# Tag $2 in $1. Tagging is used to mark selected keys for further processing.
+# Low-level routine.
+KVTagKey = $(if $(call KVHasKey,$1,$2),$(eval __mkutils_map_$1[$2]_ := 1))
+
+##
+# KVIsTagged $1 $2
+# -----------------------------------------------------------------------------
+# $1 - map name
+# $2 - key
+# -----------------------------------------------------------------------------
+# Return true if $2 is tagged in $1. Low-level routine.
+KVIsTagged = $(__mkutils_map_$1[$2]_)
+
+##
+# KVUntagKey $1 $2
+# -----------------------------------------------------------------------------
+# $1 - map name
+# $2 - key
+# -----------------------------------------------------------------------------
+# Untag $2 in $1. Low-level routine.
+KVUntagKey = $(if $(call KVIsTagged,$1,$2),$(eval __mkutils_map_$1[$2]_ :=))
+
+##
+# KVRemoveKey $1 $2
+# -----------------------------------------------------------------------------
+# $1 - map name
+# $2 - key
+# -----------------------------------------------------------------------------
+# Remove $2 from $1. Low-level routine.
+KVRemoveKey = $(eval \
+    __mkutils_map_$1_keys := $(filter-out $2,$(call MapKeys, $1)) \
+)
+
+##
+# KVSet $1 $2 $3
+# -----------------------------------------------------------------------------
+# $1 - map name
+# $2 - key
+# $3 - value
+# -----------------------------------------------------------------------------
+# Add $3 to $1 under the key $2. This also untag $2. Also create $1 if it is
+# not created yet.
+KVSet = $(call $(0)_,$(strip $1),$(strip $2),$(strip $3))
+KVSet_ = $(if $2,$(strip \
+    $(if $(call MapKeys, $1),,$(call MakeMap, $1)) \
+    $(call KVAddKey,$1,$2) \
+    $(call KVUntagKey,$1,$2) \
+    $(call KVSetKey,$1,$2,$3) \
+))
+
+##
+# KVGet $1 $2
+# -----------------------------------------------------------------------------
+# $1 - map name
+# $2 - key
+# -----------------------------------------------------------------------------
+# Get the value stored under the key $2 in $1.
+KVGet = $(call $(0)Key,$(strip $1),$(strip $2))
+
+##
+# KVHas $1 $2
+# -----------------------------------------------------------------------------
+# $1 - map name
+# $2 - key
+# -----------------------------------------------------------------------------
+# Return true if $2 is in $1.
+KVHas = $(call $(0)Key,$(strip $1),$(strip $2))
+
+##
+# KVDel $1 $2
+# -----------------------------------------------------------------------------
+# $1 - map name
+# $2 - key
+# -----------------------------------------------------------------------------
+# Remove $2 from $1. This also untag $2.
+KVDel = $(call $(0)_,$(strip $1),$(strip $2))
+KVDel_ = $(if $(call KVHasKey,$1,$2),$(strip \
+    $(call KVSetKey,$1,$2,) \
+    $(call KVUntagKey,$1,$2) \
+    $(call KVRemoveKey,$1,$2) \
+))
+
+##
+# KVHide $1 $2
+# -----------------------------------------------------------------------------
+# $1 - map name
+# $2 - key
+# -----------------------------------------------------------------------------
+# Hide $2 in $1, so algorithms working with $1 behave like if $2 was removed.
+# The value stored under the key $2 remains untouched. Use hiding instead of
+# removing for reusable keys.
+KVHide = $(call KVTagKey,$(strip $1),$(strip $2))
+
+##
+# KVIsHidden $1 $2
+# -----------------------------------------------------------------------------
+# $1 - map name
+# $2 - key
+# -----------------------------------------------------------------------------
+# Return true if $2 is hidden in $1.
+KVIsHidden = $(call KVIsTagged,$(strip $1),$(strip $2))
+
+##
+# KVUnhide $1 $2
+# -----------------------------------------------------------------------------
+# $1 - map name
+# $2 - key
+# -----------------------------------------------------------------------------
+# Unhide $2 in $1.
+KVUnhide = $(call KVUntagKey,$(strip $1),$(strip $2))
+
+##
+# KVApply $1 $2 $3
+# -----------------------------------------------------------------------------
+# $1 - map name
+# $2 - function
+# $3 - user argument to $2
+# -----------------------------------------------------------------------------
+# Iterate over all visible keys of $1. During every iteration, call $2 with the
+# value stored under the current key in $1 as the 1st argument, the current key
+# as the 2nd argument, the $1 as the 3rd argument, and the $3 as the 4th
+# argument.
+KVApply = $(call $(0)_,$(strip $1),$(strip $2),$(strip $3))
+KVApply_ = $(strip $(foreach x,$(call MapKeys,$1),$(call $(0)a,$x,$1,$2,$3)))
+KVApply_a = $(if $(call KVIsTagged,$2,$1),, \
+    $(call $3,$(call KVGetKey,$2,$1),$1,$2,$4) \
+)
+
+##
+# KVApplyHidden $1 $2 $3
+# -----------------------------------------------------------------------------
+# $1 - map name
+# $2 - function
+# $3 - user argument to $2
+# -----------------------------------------------------------------------------
+# Iterate over all hidden keys of $1. During every iteration, call $2 with the
+# value stored under the current key in $1 as the 1st argument, the current key
+# as the 2nd argument, the $1 as the 3rd argument, and the $3 as the 4th
+# argument.
+KVApplyHidden = $(call $(0)_,$(strip $1),$(strip $2),$(strip $3))
+KVApplyHidden_ = $(strip \
+    $(foreach x,$(call MapKeys,$1),$(call $(0)a,$x,$1,$2,$3)) \
+)
+KVApplyHidden_a = $(if $(call KVIsTagged,$2,$1), \
+    $(call $3,$(call KVGetKey,$2,$1),$1,$2,$4) \
+)
+
+##
+# KVApplyAll $1 $2 $3
+# -----------------------------------------------------------------------------
+# $1 - map name
+# $2 - function
+# $3 - user argument to $2
+# -----------------------------------------------------------------------------
+# Iterate over all keys of $1. During every iteration, call $2 with the value
+# stored under the current key in $1 as the 1st argument, the current key as
+# the 2nd argument, the $1 as the 3rd argument, and the $3 as the 4th argument.
+KVApplyAll = $(call $(0)_,$(strip $1),$(strip $2),$(strip $3))
+KVApplyAll_ = $(strip $(foreach x,$(call MapKeys,$1), \
+    $(call $2,$(call KVGetKey,$1,$x),$x,$1,$3) \
+))
+
+## ============================================================================
+## == 6) Evaluating expressions                                              ==
 ## ============================================================================
 
 # Counters
@@ -344,7 +578,7 @@ Div = $(call AssertNe_,$2,0)$(call EvalExpr,$1 / $2)
 Mod = $(call AssertNe_,$2,0)$(call EvalExpr,$1 % $2)
 
 ## ============================================================================
-## == 6) Comparations                                                        ==
+## == 7) Comparations                                                        ==
 ## ============================================================================
 
 ##
@@ -420,7 +654,7 @@ NotEqual = $(call $(0)_,$(strip $1),$(strip $2))
 NotEqual_ = $(subst x$1,,x$2)$(subst x$2,,x$1)
 
 ## ============================================================================
-## == 7) Assertions                                                          ==
+## == 8) Assertions                                                          ==
 ## ============================================================================
 
 ##
@@ -519,7 +753,7 @@ AssertNotEqual_ = $(call Assert_,$(call NotEqual_,$1,$2),$(strip \
 ))
 
 ## ============================================================================
-## == 8) Printing                                                            ==
+## == 9) Printing                                                            ==
 ## ============================================================================
 
 # Detect for coloured output support
@@ -608,7 +842,7 @@ ColorPrint = $(call Print,$(call Colorize,$1,$2),$(__mkutils_echo_e) $3)
 LightColorPrint = $(call ColorPrint,LIGHT_$1,$2,$3)
 
 ## ============================================================================
-## == 9) Running programs                                                    ==
+## == 10) Running programs                                                   ==
 ## ============================================================================
 
 __mkutils_Run_output :=
@@ -733,7 +967,7 @@ FindProgram_ = $(if $1,$(strip \
 FindProgram_a = $(if $(call Which,$1),$1,$(call FindProgram_,$2))
 
 ## ============================================================================
-## == 10) Probing Python interpreter                                         ==
+## == 11) Probing Python interpreter                                         ==
 ## ============================================================================
 
 ##
@@ -774,7 +1008,7 @@ NeedPython_h = $(call NeedPython_i,$(strip $1),$(strip $2),$(strip $3))
 NeedPython_i = $(if $1,$(if $2,$(call Ge_,$1$2,$3)))
 
 ## ============================================================================
-## == 11) Targets                                                            ==
+## == 12) Targets                                                            ==
 ## ============================================================================
 
 __mkutils_help_temp :=
@@ -1357,7 +1591,7 @@ help: help_prologue $$(__mkutils_help_targets) help_epilogue
 endef
 
 ## ============================================================================
-## == 12) Testing                                                            ==
+## == 13) Testing                                                            ==
 ## ============================================================================
 
 __mkutils_test_temp :=
@@ -1471,7 +1705,7 @@ __mkutils_eval_test_result = $(strip \
 )
 
 ## ============================================================================
-## == 13) Managing variables                                                 ==
+## == 14) Managing variables                                                 ==
 ## ============================================================================
 
 ##
