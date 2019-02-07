@@ -30,15 +30,18 @@ DLINE := =======================================
 DLINE := $(DLINE)$(DLINE)=
 [ := (
 ] := )
+. := .
 , := ,
 define nl =
 
 endef
+[a-z] := a b c d e f g h i j k l m n o p q r s t u v w x y z
+[A-Z] := A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
 
 ##
 # Help to specify the location of tools used by mkutils. TOOLS_PREFIX should
 # be an absolute path to the tools directory (must ends with `/`),
-# TOOLS_EXESUFF specifies the tool's extension (i.e. `.exe`). If TOOLS_PREFIX
+# TOOLS_EXESUFF specifies the tool's extension (e.g. `.exe`). If TOOLS_PREFIX
 # (TOOLS_EXESUFF) is not defined, PREFIX (EXESUFF) are used as default.
 TOOLS_PREFIX ?= $(PREFIX)
 export TOOLS_PREFIX
@@ -578,8 +581,17 @@ Div = $(call AssertNe_,$2,0)$(call EvalExpr,$1 / $2)
 Mod = $(call AssertNe_,$2,0)$(call EvalExpr,$1 % $2)
 
 ## ============================================================================
-## == 7) Comparations                                                        ==
+## == 7) Value testing                                                       ==
 ## ============================================================================
+
+##
+# IfEmpty $1 $2
+# -----------------------------------------------------------------------------
+# $1, $2 - values
+# -----------------------------------------------------------------------------
+# Return $2 if $1 is empty. Otherwise $1 is returned.
+IfEmpty = $(call $(0)_,$(strip $1),$(strip $2))
+IfEmpty_ = $(if $1,$1,$2)
 
 ##
 # Eq $1 $2
@@ -1011,8 +1023,12 @@ NeedPython_i = $(if $1,$(if $2,$(call Ge_,$1$2,$3)))
 ## == 12) Targets                                                            ==
 ## ============================================================================
 
+VARHELP_PADDING := 4
+
 __mkutils_help_temp :=
 __mkutils_help_targets :=
+__mkutils_help_uvars :=
+__mkutils_help_dvars :=
 __mkutils_help_env :=
 __mkutils_help_descname :=
 __mkutils_help_l_i := 2
@@ -1020,8 +1036,27 @@ __mkutils_help_l_w := 1
 __mkutils_help_l_s := *
 __mkutils_help_l_j :=
 __mkutils_help_l_t := 4
-__mkutils_help_l_n :=
+__mkutils_help_l_n := Empty
 __mkutils_help_l_g = $(__mkutils_help_l_s)
+
+##
+# TargetNSQ
+# -----------------------------------------------------------------------------
+# Namespace qualifier of targets. Used only internally.
+TargetNSQ = tg
+
+##
+# DVarNSQ
+# -----------------------------------------------------------------------------
+# Namespace qualifier of default variables (i.e. variables defined by mkutils).
+# Used only internally.
+DVarNSQ = dv
+
+##
+# UVarNSQ
+# -----------------------------------------------------------------------------
+# Namespace qualifier of user variables. Used only internally.
+UVarNSQ = uv
 
 ##
 # UpdatePadding $1 $2
@@ -1040,9 +1075,7 @@ UpdatePadding_a = $(call UpdatePadding_b,$1,$(if $2,_$(2)_,_))
 UpdatePadding_b = $(strip \
     $(if $(HELP$(2)FIRSTCOLWIDTH),, \
         $(eval HELP$(2)FIRSTCOLWIDTH := 0) \
-        $(eval export HELP$(2)FIRSTCOLWIDTH) \
         $(eval HELP$(2)PADDING := 0) \
-        $(eval export HELP$(2)PADDING) \
     ) \
     $(if $(call Gt_,$1,$(HELP$(2)FIRSTCOLWIDTH)), \
         $(eval HELP$(2)FIRSTCOLWIDTH := $1) \
@@ -1051,42 +1084,75 @@ UpdatePadding_b = $(strip \
 )
 
 ##
+# HelpLinesMap $1
+# -----------------------------------------------------------------------------
+# $1 - namespace
+# -----------------------------------------------------------------------------
+# Get the name of map with help lines associated with $1. Used only internally.
+HelpLinesMap = help[$(strip $1)].lines
+
+##
+# HelpLines $1
+# -----------------------------------------------------------------------------
+# $1 - namespace
+# -----------------------------------------------------------------------------
+# Return help lines as a list of indicies. Used only internally.
+HelpLines = $(call MapKeys,$(call HelpLinesMap,$1))
+
+##
+# GetHelpLine $1 $2
+# -----------------------------------------------------------------------------
+# $1 - namespace
+# $2 - line index
+# -----------------------------------------------------------------------------
+# Return a help line at index $2. Used only internally.
+GetHelpLine = $(call KVGet,$(call HelpLinesMap,$1),$2)
+
+##
 # AddToHelpLine $1 $2
 # -----------------------------------------------------------------------------
-# $1 - target name
+# $1 - namespace
 # $2 - words
 # -----------------------------------------------------------------------------
-# Add $2 to __mkutils_help_$1_line_<N>, where <N> is the current value of
-# __mkutils_counter_a counter. If __mkutils_help_$1_line_<N> was not previously
-# defined, define it and add it to __mkutils_help_$1_lines list. Also define
-# __mkutils_help_$1_lines if it was not defined previously. This macro works
-# as a helper for FormatHelp.
-AddToHelpLine = $(strip \
-    $(if $(__mkutils_help_$(strip $1)_lines),, \
-        $(call Reset_,a,1) \
-        $(eval __mkutils_help_$(strip $1)_lines :=) \
+# Add $2 to help lines under the index given by value of counter `a`. Used only
+# internally.
+AddToHelpLine = $(call $(0)_,$(call HelpLinesMap,$1),$2)
+AddToHelpLine_ = $(strip \
+    $(call KVSet, $1, $(call Value, a), \
+        $(call KVGet, $1, $(call Value, a)) $2 \
     ) \
-    $(if $(__mkutils_help_$(strip $1)_line_$(call Value, a)),, \
-        $(eval __mkutils_help_$(strip $1)_line_$(call Value, a) :=) \
-        $(eval __mkutils_help_$(strip $1)_lines += \
-            __mkutils_help_$(strip $1)_line_$(call Value, a) \
-        ) \
-    ) \
-    $(eval __mkutils_help_$(strip $1)_line_$(call Value, a) += $2) \
 )
+
+##
+# DelHelpLine $1 $2
+# -----------------------------------------------------------------------------
+# $1 - namespace
+# $2 - line index
+# -----------------------------------------------------------------------------
+# Remove a help line at index $2. Used only internally.
+DelHelpLine = $(call KVDel,$(call HelpLinesMap,$1),$2)
+
+##
+# ReadHelpLine $1
+# -----------------------------------------------------------------------------
+# $1 - namespace
+# -----------------------------------------------------------------------------
+# From help lines, read and return a line with the least index. The reading
+# operation is destructive, i.e. the read line is removed from help lines
+# permanently. Used only internally.
+ReadHelpLine = $(call $(0)_,$1,$(call Head_,$(call HelpLines, $1)))
+ReadHelpLine_ = $(call GetHelpLine, $1, $2)$(call DelHelpLine, $1, $2)
 
 ##
 # FormatHelp $1 $2
 # -----------------------------------------------------------------------------
-# $1 - target name
+# $1 - namespace
 # $2 - help text
 # -----------------------------------------------------------------------------
-# Split $2 to lines. If $2 is non-empty, introduce a list of lines,
-# __mkutils_help_$1_lines, that contains variables of the form
-# __mkutils_help_$1_line_<N>, where <N> stands for positive integer. Each
-# variable, __mkutils_help_$1_line_<N>, that is newly introduced represents
-# a one line of a help text. A help text is a list of words and commands.
-# Commands supported so far are
+# Split $2 to lines. The lines are stored to the help lines container
+# associated with $1 and are accessible throught their indicies (1st line is
+# mapped to `1` etc.). A help text is a list of words and commands. Commands
+# supported so far are
 #
 #   /p <w> - print <w>
 #   /n     - end the recent line
@@ -1116,12 +1182,12 @@ AddToHelpLine = $(strip \
 #
 # Unknown and incomplete commands are treated as ordinary words. Nested lists
 # are not supported for now, the improper use of commands leads to undefined
-# behaviour. If $2 is empty, no new variables are introduced. As a side effect,
-# this macro resets __mkutils_counter_a to 0.
+# behaviour. As a side effect, this macro resets counter `a` to 0.
 FormatHelp = $(strip \
     $(eval __mkutils_help_temp :=) \
     $(eval __mkutils_help_env :=) \
     $(eval __mkutils_help_descname :=) \
+    $(call Reset_,a,1) \
     $(foreach w,$2,$(call $(0)_a,$1,$w)) \
     $(if $(__mkutils_help_temp), \
         $(call AddToHelpLine, $1, $(__mkutils_help_temp)) \
@@ -1140,7 +1206,7 @@ FormatHelp_a = $(strip \
     ,$(if $(call Equal_,$(__mkutils_help_temp),/d), \
         $(call Inc_,a) \
         $(call AddToHelpLine, $1, /d $2) \
-        $(eval __mkutils_help_env := /d) \
+        $(eval __mkutils_help_env := D) \
         $(eval __mkutils_help_descname := $2) \
         $(eval __mkutils_help_temp :=) \
     ,$(if $(call Equal_,$(__mkutils_help_temp),/i), \
@@ -1158,11 +1224,11 @@ FormatHelp_a = $(strip \
     ,$(if $(call Equal_,$2,/l), \
         $(call Inc_,a) \
         $(call AddToHelpLine, $1, $2) \
-        $(eval __mkutils_help_env := $2) \
+        $(eval __mkutils_help_env := L) \
     ,$(if $(call Equal_,$2,/d), \
         $(eval __mkutils_help_temp := $2) \
     ,$(if $(call Equal_,$2,/i), \
-        $(if $(call Equal_,$(__mkutils_help_env),/d), \
+        $(if $(call Equal_,$(__mkutils_help_env),D), \
             $(eval __mkutils_help_temp := $2) \
         , \
             $(call Inc_,a) \
@@ -1181,96 +1247,161 @@ FormatHelp_a = $(strip \
 )
 
 ##
-# GenerateHelpLines $1
+# GhlPunct $1
 # -----------------------------------------------------------------------------
-# $1 - target name
+# $1 - text
 # -----------------------------------------------------------------------------
-# From __mkutils_help_$1_lines, generate help-$1-1, help-$1-2, ..., help-$1-N
-# targets that print 1st, 2nd, ..., Nth line from __mkutils_help_$1_lines,
-# respectively. Additionally, generate help-$1 that print all lines from
-# __mkutils_help_$1_lines. May modify __mkutils_counter_b.
-GenerateHelpLines = $(call $(0)_,$(strip $1))
-GenerateHelpLines_ = $(call GenerateHelpLines_a,$1,$(__mkutils_help_$1_lines))
-GenerateHelpLines_a = $(if $2,$(call GenerateHelpLines_b,$1,$2))
-GenerateHelpLines_b = $(call GenerateHelpLines_c,$1,$(foreach w,$2, \
-    help-$1-$(subst __mkutils_help_$1_line_,,$w) \
+# Sanitize spaces around punctation. Used only internally.
+GhlPunct = $(subst e.g.  ,e.g. ,$(subst . ,.  ,$1))
+
+##
+# GhlIntro $1 $2 $3
+# -----------------------------------------------------------------------------
+# $1 - namespace
+# $2 - target name
+# $3 - label
+# -----------------------------------------------------------------------------
+# Generate commands that prints first line of help text associated with $2.
+# Used only internally.
+GhlIntro = $(eval $(call \
+    $(0)_,$2,$3,HELP_FIRSTCOLWIDTH,$(strip $(call ReadHelpLine,$1)), \
 ))
-GenerateHelpLines_c = $(strip \
-    $(eval __mkutils_help_targets += help-$1) \
-    $(call UpdatePadding, $1) \
-    $(call GenerateHelpLines_d,$1,$(call Head_,$2),$2) \
-    $(foreach w,$(call Tail_,$2),$(call GenerateHelpLines_e,$1,$w)) \
-)
-GenerateHelpLines_d = $(eval $(call $(0)_,$1,$2,$3,HELP_FIRSTCOLWIDTH,$(strip \
-    $(__mkutils_help_$1_line_1) \
-)))
-define GenerateHelpLines_d_ =
-.PHONY: help-$1
-help-$1: $3
-.PHONY: $3
-$2:
-	@$$(PRINTF) "  %-$$($4)s - $(subst . ,.  ,$5)\n" "$1"
+define GhlIntro_ =
+.PHONY: $2
+$2::
+	@$$(PRINTF) "  %-$$($3)s - $(call GhlPunct,$4)\n" "$1"
 endef
-GenerateHelpLines_e = $(call GenerateHelpLines_f,$1,$(subst help-$1-,,$2),$2)
-GenerateHelpLines_f = $(call GenerateHelpLines_g,$3,$(strip \
-    $(__mkutils_help_$1_line_$2) \
-))
-GenerateHelpLines_g = $(call GenerateHelpLines_h,$1,$2,$(call Head_,$2))
-GenerateHelpLines_h = $(strip \
+
+##
+# GhlVarIntro $1 $2 $3 $4
+# -----------------------------------------------------------------------------
+# $1 - namespace
+# $2 - var=domain pair (e.g. PROG=PATH)
+# $3 - label
+# $4 - variable holding indentation
+# -----------------------------------------------------------------------------
+# Generate commands that prints first lines of help text associated with $2.
+# Used only internally.
+GhlVarIntro = $(eval $(call $(0)_,$2,$3,$(call Head_,$(subst =, ,$2))))
+GhlVarIntro_ = $(call $(0)a,$1,$2,$3,$(call GetTargetsAssociatedWithVar,$3))
+define GhlVarIntro_a =
+.PHONY: $2
+$2::
+	@$$(ECHO) "  $1"
+ifneq ($4,)
+	@$$(ECHO) "      [targets: $$(subst $$(SPACE),$$(,) ,$4)]"
+endif
+	@$$(ECHO) "      [default: $$(call ShowVar, $3)]"
+endef
+
+##
+# GhlText $1 $2 $3 $4
+# -----------------------------------------------------------------------------
+# $1 - namespace
+# $2 - target name or var=domain pair
+# $3 - label
+# $4 - variable holding indentation
+# -----------------------------------------------------------------------------
+# Generate commands that print the rest of lines of help text associated with
+# $2. Used only internally.
+GhlText = $(strip \
+    $(call KVApplyAll, $(call HelpLinesMap, $1), GhlTextProcessLineCb,$3 $4) \
+)
+
+##
+# GhlTextProcessLineCb $1 $2 $3 $4
+# -----------------------------------------------------------------------------
+# $1 - current value (here: line)
+# $2 - current key (here: line number)
+# $3 - map name (here: help[$namespace].lines)
+# $4 - user's argument (here: $label $variable_holding_indentation)
+# -----------------------------------------------------------------------------
+# Callback to KVApplyAll. Called on each line from $3. Used only internally.
+GhlTextProcessLineCb = $(call $(0)_,$4,$1)
+GhlTextProcessLineCb_ = $(strip \
+    $(call GhlTextProcessLineSwitch,$(call \
+        Head_,$1),$(call \
+        Elem_,$1,2),$(call \
+        Head_,$2),$(call \
+        Elem_,$2,2),$(call \
+        Slice_,$2,3), \
+    ) \
+    $(call KVDel, $3, $2) \
+)
+
+##
+# GhlTextProcessLineSwitch $1 $2 $3 $4 $5
+# -----------------------------------------------------------------------------
+# $1 - label
+# $2 - variable holding indentation
+# $3 - 1st word of line
+# $4 - 2nd word of line
+# $5 - the rest of line
+# -----------------------------------------------------------------------------
+# Based on value of $3, choose the proper action that generates printing
+# commands. Used only internally.
+GhlTextProcessLineSwitch = $(strip \
     $(if $(call Equal_,$3,//), \
-        $(call GenerateHelpLines_i,$1,$(call Tail_,$2)) \
+        $(call GhlTextEmpty$(if $4,Plain),$1,$2,$4 $5) \
     ,$(if $(call Equal_,$3,/l), \
-        $(eval __mkutils_help_env := $3) \
-        $(call GenerateHelpLines_j_1) \
-        $(foreach x,$(call Tail_,$2),$(call GenerateHelpLines_j_2,$x)) \
+        $(eval __mkutils_help_env := L) \
+        $(call GhlTextSetListDefaults) \
+        $(call GhlTextProcessListParams,$4 $5) \
         $(eval __mkutils_help_temp :=) \
-        $(call GenerateHelpLines_j_3) \
-        $(call GenerateHelpLines_j_4,$1,$(__mkutils_help_l_n)) \
+        $(call GhlTextSetListItemLabelRenderer) \
+        $(call GhlText$(__mkutils_help_l_n),$1) \
     ,$(if $(call Equal_,$3,/d), \
-        $(eval __mkutils_help_env := $3) \
-        $(eval __mkutils_help_descname := $(call Elem_,$2,2)) \
-        $(call GenerateHelpLines_k,$1) \
+        $(eval __mkutils_help_env := D) \
+        $(eval __mkutils_help_descname := $4) \
+        $(call GhlTextEmpty,$1) \
     ,$(if $(call Equal_,$3,/i), \
-        $(if $(call Equal_,$(__mkutils_help_env),/d), \
-            $(call GenerateHelpLines_l_1,$1, \
-                $(call Elem_,$2,2),$(call Slice_,$2,3) \
-            ) \
-        , \
-            $(call Inc_,b) \
-            $(call GenerateHelpLines_l_2,$1,$(call Tail_,$2)) \
-        ) \
+        $(call GhlTextInc$(__mkutils_help_env)ItemCounter) \
+        $(call GhlText$(__mkutils_help_env)Item,$1,$2,$4,$5) \
     ,$(if $(call Equal_,$3,/|), \
-        $(call GenerateHelpLines_m,$1,$(call Tail_,$2)) \
+        $(call GhlTextCont$(__mkutils_help_env)Item,$1,$2,$4 $5) \
     ,$(if $(call Equal_,$3,/e), \
-        $(call GenerateHelpLines_n,$1,$(call Tail_,$2)) \
-        $(call GenerateHelpLines_j_1) \
+        $(call GhlText$(call GhlTextNeedEmpty)$(if $4,Plain),$1,$2,$4 $5) \
+        $(call GhlTextSetListDefaults) \
         $(eval __mkutils_help_env :=) \
         $(eval __mkutils_help_descname :=) \
     , \
-        $(call GenerateHelpLines_o,$1,$2) \
+        $(call GhlTextNonePlain,$1,$2,$3 $4 $5) \
     )))))) \
 )
-GenerateHelpLines_i = $(eval $(call $(0)_$(if $2,1,2),$1,$2))
-define GenerateHelpLines_i_1 =
-$1:
-	@$$(PRINTF) "\n  %-$$(HELP_PADDING)s$(subst . ,.  ,$2)\n" ""
-endef
-define GenerateHelpLines_i_2 =
-$1:
-	@$$(ECHO) ""
-endef
-GenerateHelpLines_j_1 = $(strip \
+
+##
+# GhlTextSetListDefaults
+# -----------------------------------------------------------------------------
+# Set the default parameters of list environment. Used only internally.
+GhlTextSetListDefaults = $(strip \
     $(eval __mkutils_help_l_i := 2) \
     $(eval __mkutils_help_l_w := 1) \
     $(eval __mkutils_help_l_s := *) \
     $(eval __mkutils_help_l_j :=) \
     $(eval __mkutils_help_l_t := 4) \
-    $(eval __mkutils_help_l_n :=) \
+    $(eval __mkutils_help_l_n := Empty) \
     $(eval __mkutils_help_l_g = $$(__mkutils_help_l_s)) \
     $(eval __mkutils_help_temp :=) \
     $(call Reset_,b) \
 )
-GenerateHelpLines_j_2 = $(strip \
+
+##
+# GhlTextProcessListParams $1
+# -----------------------------------------------------------------------------
+# $1 - list environment parameters
+# -----------------------------------------------------------------------------
+# Process list environment parameters. Used only internally.
+GhlTextProcessListParams = $(strip $(foreach \
+    p,$1,$(call GhlTextProcessListParam,$p) \
+))
+
+##
+# GhlTextProcessListParam $1
+# -----------------------------------------------------------------------------
+# $1 - list environment parameter
+# -----------------------------------------------------------------------------
+# Process one parameter of the list environment. Used only internally.
+GhlTextProcessListParam = $(strip \
     $(if $(call Equal_,$(__mkutils_help_temp),-i), \
         $(eval __mkutils_help_l_i := $1) \
         $(eval __mkutils_help_temp :=) \
@@ -1296,128 +1427,273 @@ GenerateHelpLines_j_2 = $(strip \
     ,$(if $(call Equal_,$1,-t), \
         $(eval __mkutils_help_temp := $1) \
     ,$(if $(call Equal_,$1,-n), \
-        $(eval __mkutils_help_l_n := n) \
+        $(eval __mkutils_help_l_n := None) \
     ))))))))))) \
 )
-GenerateHelpLines_j_3 = $(strip \
+
+##
+# GhlTextSetListItemLabelRenderer
+# -----------------------------------------------------------------------------
+# Determine and set a macro that is used to render labels of ordered lists
+# items. Used only internally.
+GhlTextSetListItemLabelRenderer = $(strip \
     $(if $(findstring 1,$(__mkutils_help_l_s)), \
-        $(eval __mkutils_help_l_g = $$(call GenerateHelpLines_j_5,1, \
-            GenerateHelpLines_j_6 \
+        $(eval __mkutils_help_l_g = $$(call GhlTextRenderOListItemLabel,1, \
+            GhlTextOListItemLabelArabic \
         )) \
     ,$(if $(findstring a,$(__mkutils_help_l_s)), \
-        $(eval __mkutils_help_l_g = $$(call GenerateHelpLines_j_5,a, \
-            GenerateHelpLines_j_7 \
+        $(eval __mkutils_help_l_g = $$(call GhlTextRenderOListItemLabel,a, \
+            GhlTextOListItemLabelLcLetter \
         )) \
     ,$(if $(findstring A,$(__mkutils_help_l_s)), \
-        $(eval __mkutils_help_l_g = $$(call GenerateHelpLines_j_5,A, \
-            GenerateHelpLines_j_8 \
+        $(eval __mkutils_help_l_g = $$(call GhlTextRenderOListItemLabel,A, \
+            GhlTextOListItemLabelUcLetter \
         )) \
     , \
         $(eval __mkutils_help_l_g = $$(__mkutils_help_l_s)) \
     ))) \
 )
-GenerateHelpLines_j_4 = $(eval $(call $(0)_$2,$1))
-define GenerateHelpLines_j_4_ =
-$1:
+
+##
+# GhlTextRenderOListItemLabel $1 $2
+# -----------------------------------------------------------------------------
+# $1 - ordered list item numbering style selector
+# $2 - ordered list item number value getter
+# -----------------------------------------------------------------------------
+# Render a label of ordered list item. Used only internally.
+GhlTextRenderOListItemLabel = $(subst $1,$(call $2),$(__mkutils_help_l_s))
+
+##
+# GhlTextOListItemLabelArabic
+# -----------------------------------------------------------------------------
+# Return the order of ordered list item as arabic number. Used only internally.
+GhlTextOListItemLabelArabic = $(call Value, b)
+
+##
+# GhlTextOListItemLabelLcLetter
+# -----------------------------------------------------------------------------
+# Return the order of ordered list item as lower-case letter. Used only
+# internally.
+GhlTextOListItemLabelLcLetter = $(call \
+    IfEmpty,$(call Elem_,$([a-z]),$(call Value, b)),? \
+)
+
+##
+# GhlTextOListItemLabelUcLetter
+# -----------------------------------------------------------------------------
+# Return the order of ordered list item as upper-case letter. Used only
+# internally.
+GhlTextOListItemLabelUcLetter = $(call \
+    IfEmpty,$(call Elem_,$([A-Z]),$(call Value, b)),? \
+)
+
+##
+# GhlTextNeedEmpty
+# -----------------------------------------------------------------------------
+# Return `Empty` if the emtpy line need to be inserted or `None` otherwise.
+# Used only internally.
+GhlTextNeedEmpty = $(call $(0)$(__mkutils_help_env))
+GhlTextNeedEmptyD = Empty
+GhlTextNeedEmptyL = $(__mkutils_help_l_n)
+
+##
+# GhlTextNone
+# -----------------------------------------------------------------------------
+# Generate no printing command. Used only internally.
+GhlTextNone =
+
+##
+# GhlTextEmpty $1
+# -----------------------------------------------------------------------------
+# $1 - label
+# -----------------------------------------------------------------------------
+# Generate command that prints empty line. Used only internally.
+GhlTextEmpty = $(eval $(call $(0)_,$1))
+define GhlTextEmpty_ =
+$1::
 	@$$(ECHO) ""
 endef
-define GenerateHelpLines_j_4_n =
-$1:
-	@$$(TRUE) ""
+
+##
+# GhlTextNonePlain $1 $2 $3
+# -----------------------------------------------------------------------------
+# $1 - label
+# $2 - variable holding indentation
+# $3 - text
+# -----------------------------------------------------------------------------
+# Generate command that prints ordinary line of text. Used only internally.
+GhlTextNonePlain = $(eval $(call $(0)_,$1,$2,$(strip $3)))
+define GhlTextNonePlain_ =
+$1::
+	@$$(PRINTF) "  %-$$($2)s$(call GhlPunct,$3)\n" ""
 endef
-GenerateHelpLines_j_5 = $(subst $1,$(call $(strip $2)),$(__mkutils_help_l_s))
-GenerateHelpLines_j_6 = $(call Value, b)
-GenerateHelpLines_j_7 = $(word $(call Value, b), \
-    a b c d e f g h i j k l m n o p q r s t u v w x y z \
-)
-GenerateHelpLines_j_8 = $(word $(call Value, b), \
-    A B C D E F G H I J K L M N O P Q R S T U V W X Y Z \
-)
-GenerateHelpLines_k = $(eval $(call $(0)_,$1))
-define GenerateHelpLines_k_ =
-$1:
-	@$$(ECHO) ""
+
+##
+# GhlTextEmptyPlain $1 $2 $3
+# -----------------------------------------------------------------------------
+# $1 - label
+# $2 - variable holding indentation
+# $3 - text
+# -----------------------------------------------------------------------------
+# Generate command that prints empty line and ordinary line of text. Used only
+# internally.
+GhlTextEmptyPlain = $(eval $(call $(0)_,$1,$2,$(strip $3)))
+define GhlTextEmptyPlain_ =
+$1::
+	@$$(PRINTF) "\n  %-$$($2)s$(call GhlPunct,$3)\n" ""
 endef
-GenerateHelpLines_l_1 = $(eval $(call $(0)_,$1,$2,$3,HELP_PADDING,$(strip \
-    HELP_$(__mkutils_help_descname)_FIRSTCOLWIDTH \
-)))
-define GenerateHelpLines_l_1_ =
-$1:
-	@$$(PRINTF) "  %-$$($4)s  %-$$($5)s - $(subst . ,.  ,$(strip $3))\n" \
-	           "" "$(strip $2)"
-endef
-GenerateHelpLines_l_2 = $(eval $(call $(0)_,$1,$2,HELP_PADDING,$(call \
-    GenerateHelpLines_l_3),$(__mkutils_help_l_j),$(__mkutils_help_l_w),$(call \
-    __mkutils_help_l_g), \
+
+##
+# GhlTextDItem $1 $2 $3 $4
+# -----------------------------------------------------------------------------
+# $1 - label
+# $2 - variable holding indentation
+# $3 - term to be described
+# $4 - description
+# -----------------------------------------------------------------------------
+# Generate command that prints description environment item. Used only
+# internally.
+GhlTextDItem = $(eval $(call \
+    $(0)_,$1,$2,HELP_$(__mkutils_help_descname)_FIRSTCOLWIDTH,$3,$4, \
 ))
-define GenerateHelpLines_l_2_ =
-$1:
-	@$$(PRINTF) "  %-$$($3)s$(4)%$(5)$(6)s $(subst . ,.  ,$2)\n" \
-	           "" $(if $4,"") "$7"
+define GhlTextDItem_ =
+$1::
+	@$$(PRINTF) "  %-$$($2)s  %-$$($3)s - $(call GhlPunct,$5)\n" "" "$4"
 endef
-GenerateHelpLines_l_3 = $(strip \
-    $(if $(call Gt_,0$(__mkutils_help_l_i),0),%-$(__mkutils_help_l_i)s) \
+
+##
+# GhlTextIncDItemCounter
+# -----------------------------------------------------------------------------
+# Increase description environment item counter (no operation). Used only
+# internally.
+GhlTextIncDItemCounter =
+
+##
+# GhlTextLItem $1 $2 $3 $4
+# -----------------------------------------------------------------------------
+# $1 - label
+# $2 - variable holding indentation
+# $3 - text
+# $4 - text
+# -----------------------------------------------------------------------------
+# Generate command that prints list environment item. Used only internally.
+GhlTextLItem = $(eval $(call \
+    $(0)_,$1,$2,$(strip \
+        $(if $(call Gt_,0$(__mkutils_help_l_i),0),%-$(__mkutils_help_l_i)s) \
+    ),$(__mkutils_help_l_j),$(__mkutils_help_l_w),$(strip \
+        $(call __mkutils_help_l_g) \
+    ),$(strip $3 $4), \
+))
+define GhlTextLItem_ =
+$1::
+	@$$(PRINTF) "  %-$$($2)s$(3)%$(4)$(5)s $(call GhlPunct,$7)\n" \
+	            "" $(if $3,"") "$6"
+endef
+
+##
+# GhlTextIncLItemCounter
+# -----------------------------------------------------------------------------
+# Increase list environment item counter (increase `b` counter). Used only
+# internally.
+GhlTextIncLItemCounter = $(call Inc_,b)
+
+##
+# GhlTextContDItem $1 $2 $3
+# -----------------------------------------------------------------------------
+# $1 - label
+# $2 - variable holding indentation
+# $3 - text
+# -----------------------------------------------------------------------------
+# Generate command that prints next line of description environment item. Used
+# only internally.
+GhlTextContDItem = $(eval $(call \
+    $(0)_,$1,$2,HELP_$(__mkutils_help_descname)_PADDING,$(strip $3), \
+))
+define GhlTextContDItem_ =
+$1::
+	@$$(PRINTF) "  %-$$($2)s  %-$$($3)s$(call GhlPunct,$4)\n" "" ""
+endef
+
+##
+# GhlTextContLItem $1 $2 $3
+# -----------------------------------------------------------------------------
+# $1 - label
+# $2 - variable holding indentation
+# $3 - text
+# -----------------------------------------------------------------------------
+# Generate command that prints next line of list environment item. Used only
+# internally.
+GhlTextContLItem = $(call \
+    $(0)_,$1,$2,$(call Add, $(__mkutils_help_l_i), $(__mkutils_help_l_t)),$3, \
 )
-GenerateHelpLines_m = $(strip \
-    $(if $(call Equal_,$(__mkutils_help_env),/d), \
-        $(call GenerateHelpLines_m_1,$1,$2,HELP_PADDING,$(strip \
-            HELP_$(__mkutils_help_descname)_PADDING \
-        )) \
-    , \
-        $(call GenerateHelpLines_m_2,$1,$2,HELP_PADDING,$(strip \
-            $(call Add, $(__mkutils_help_l_i), $(__mkutils_help_l_t)) \
-        )) \
+GhlTextContLItem_ = $(eval $(call \
+    $(0)a,$1,$2,$(if $(call Gt_,$3,0),%-$(3)s),$(strip $4), \
+))
+define GhlTextContLItem_a =
+$1::
+	@$$(PRINTF) "  %-$$($2)s$(3)$(call GhlPunct,$4)\n" $(if $3,"") ""
+endef
+
+##
+# GhlGenTargetHlp $1 $2
+# -----------------------------------------------------------------------------
+# $1 - target name
+# $2 - list of macros that generate printing commands
+# -----------------------------------------------------------------------------
+# Drive a generating of commands that print help for $1. Used only internally.
+GhlGenTargetHlp = $(call $(0)_,$(TargetNSQ).$1,$1,$2)
+GhlGenTargetHlp_ = $(strip \
+    $(if $(call HelpLines, $1), \
+        $(eval __mkutils_help_targets += help-$2) \
+        $(call UpdatePadding, $2) \
+        $(foreach f,$3,$(call $f,$1,$2,help-$2,HELP_PADDING)) \
     ) \
 )
-GenerateHelpLines_m_1 = $(eval $(call $(0)_,$1,$2,$3,$4))
-define GenerateHelpLines_m_1_ =
-$1:
-	@$$(PRINTF) "  %-$$($3)s  %-$$($4)s$(subst . ,.  ,$2)\n" "" ""
-endef
-GenerateHelpLines_m_2 = $(call \
-    GenerateHelpLines_m_$(if $(call Gt_,$4,0),4,3),$1,$2,$3,$4, \
-)
-GenerateHelpLines_m_3 = $(eval $(call $(0)_,$1,$2,$3))
-define GenerateHelpLines_m_3_ =
-$1:
-	@$$(PRINTF) "  %-$$($3)s$(subst . ,.  ,$2)\n" ""
-endef
-GenerateHelpLines_m_4 = $(eval $(call $(0)_,$1,$2,$3,$4))
-define GenerateHelpLines_m_4_ =
-$1:
-	@$$(PRINTF) "  %-$$($3)s%-$(4)s$(subst . ,.  ,$2)\n" "" ""
-endef
-GenerateHelpLines_n = $(call $(0)_1_$(call $(0)_2)$(if $2,y,n),$1,$2)
-GenerateHelpLines_n_1_nn = $(eval $(call $(0)_,$1,$2))
-define GenerateHelpLines_n_1_nn_ =
-$1:
-	@$$(TRUE)
-endef
-GenerateHelpLines_n_1_yn = $(eval $(call $(0)_,$1,$2))
-define GenerateHelpLines_n_1_yn_ =
-$1:
-	@$$(ECHO) ""
-endef
-GenerateHelpLines_n_1_ny = $(eval $(call $(0)_,$1,$2))
-define GenerateHelpLines_n_1_ny_ =
-$1:
-	@$$(PRINTF) "  %-$$(HELP_PADDING)s$(subst . ,.  ,$2)\n" ""
-endef
-GenerateHelpLines_n_1_yy = $(eval $(call $(0)_,$1,$2))
-define GenerateHelpLines_n_1_yy_ =
-$1:
-	@$$(PRINTF) "\n  %-$$(HELP_PADDING)s$(subst . ,.  ,$2)\n" ""
-endef
-GenerateHelpLines_n_2 = $(strip \
-    $(if $(call Equal_,$(__mkutils_help_env),/d), \
-        y,$(if $(__mkutils_help_l_n),n,y) \
+
+##
+# GhlGenDVarHlp $1 $2
+# -----------------------------------------------------------------------------
+# $1 - var=domain pair (e.g. PROG=PATH)
+# $2 - list of macros that generate printing commands
+# -----------------------------------------------------------------------------
+# Drive a generating of commands that print help for $1. Used only internally.
+GhlGenDVarHlp = $(call $(0)_,$1,$(call Head_,$(subst =, ,$1)),$2)
+GhlGenDVarHlp_ = $(call $(0)a,$1,$(DVarNSQ).$2,$2,$3)
+GhlGenDVarHlp_a = $(strip \
+    $(if $(call HelpLines, $2), \
+        $(eval __mkutils_help_dvars += help-dv-$3) \
+        $(foreach f,$4,$(call $f,$2,$1,help-dv-$3,VARHELP_PADDING)) \
     ) \
 )
-GenerateHelpLines_o = $(eval $(call $(0)_,$1,$2,HELP_PADDING))
-define GenerateHelpLines_o_ =
-$1:
-	@$$(PRINTF) "  %-$$($3)s$(subst . ,.  ,$2)\n" ""
-endef
+
+##
+# GhlGenUVarHlp $1 $2
+# -----------------------------------------------------------------------------
+# $1 - var=domain pair (e.g. PROG=PATH)
+# $2 - list of macros that generate printing commands
+# -----------------------------------------------------------------------------
+# Drive a generating of commands that print help for $1. Used only internally.
+GhlGenUVarHlp = $(call $(0)_,$1,$(call Head_,$(subst =, ,$1)),$2)
+GhlGenUVarHlp_ = $(call $(0)a,$1,$(UVarNSQ).$2,$2,$3)
+GhlGenUVarHlp_a = $(strip \
+    $(if $(call HelpLines, $2), \
+        $(eval __mkutils_help_uvars += help-uv-$3) \
+        $(foreach f,$4,$(call $f,$2,$1,help-uv-$3,VARHELP_PADDING)) \
+    ) \
+)
+
+##
+# GenerateHelpLines $1 $2 $3
+# -----------------------------------------------------------------------------
+# $1 - help generating driver name
+# $2 - term (target name or variable with its domain) the help is associated
+#      with
+# $3 - list of macros that generate printing commands
+# -----------------------------------------------------------------------------
+# Generate commands that print help lines associated with $2. A name of driver
+# that drives entire process is one of `Target`, `DVar`, or `UVar`. $3 should
+# contain only GhlIntro, GhlVarIntro, and GhlText macros.
+GenerateHelpLines = $(call GhlGen$(strip $1)Hlp,$(strip $2),$3)
 
 ##
 # DefaultTarget $1
@@ -1428,6 +1704,18 @@ endef
 DefaultTarget = $(eval .DEFAULT_GOAL := $(strip $1))
 
 ##
+# DocTarget $1 $2
+# -----------------------------------------------------------------------------
+# $1 - target name
+# $2 - help text
+# -----------------------------------------------------------------------------
+# Document a target $1.
+DocTarget = $(strip \
+    $(call FormatHelp, $(TargetNSQ).$(strip $1), $2) \
+    $(call GenerateHelpLines, Target, $1, GhlIntro GhlText) \
+)
+
+##
 # Target $1 $2
 # -----------------------------------------------------------------------------
 # $1 - target name
@@ -1436,8 +1724,7 @@ DefaultTarget = $(eval .DEFAULT_GOAL := $(strip $1))
 # Define $1 with help $2.
 Target = $(eval $(call $(0)_,$(strip $1),$(strip $2)))$(strip $1):
 define Target_ =
-$(call FormatHelp, $1, $2)
-$(call GenerateHelpLines, $1)
+$(call DocTarget, $1, $2)
 .PHONY: $1
 endef
 
@@ -1479,115 +1766,60 @@ endef
 ##
 # GenerateHelp
 # -----------------------------------------------------------------------------
-# Define `help` target that prints help for all targets defined by Target.
+# Define `help` target that prints help for all targets defined by Target and
+# all defined and documented variables.
 GenerateHelp = $(eval $(call $(0)_))
 define GenerateHelp_ =
-__mkutils_help_targets += help-help
+
+$(call DocTarget, help, print this help)
+
 __mkutils_help_targets := $$(sort $$(__mkutils_help_targets))
-.PHONY: help-help
-help-help:
-	@$$(PRINTF) "  %-$$(HELP_FIRSTCOLWIDTH)s - print this help\n" help
-.PHONY: help_prologue
+__mkutils_help_dvars := $$(sort $$(__mkutils_help_dvars))
+__mkutils_help_uvars := $$(sort $$(__mkutils_help_uvars))
+__mkutils_help_deps :=
+
+.PHONY: help_prologue help_epilogue
+__mkutils_help_deps += help_prologue
 help_prologue:
-	@$$(ECHO) "Usage: $(MAKE) <target> [settings]"
+	@$$(ECHO) "Usage: $$(MAKE) <target> [settings]"
 	@$$(ECHO) "where <target> is one of"
 	@$$(ECHO) ""
-.PHONY: help_epilogue
+__mkutils_help_deps += $$(__mkutils_help_targets)
 help_epilogue:
 	@$$(ECHO) ""
 	@$$(ECHO) "and settings are of the form NAME1=VALUE1 NAME2=VALUE2 etc."
-ifneq ($V,)
-	@$$(ECHO) "By default, $(__mkutils_name__) supports these settings:"
+__mkutils_help_deps += help_epilogue
+
+ifneq ($$(__mkutils_help_uvars),)
+.PHONY: help_uvars_prologue help_uvars_epilogue
+__mkutils_help_deps += help_uvars_prologue
+help_uvars_prologue:
+	@$$(ECHO) "Available settings are:"
 	@$$(ECHO) ""
-	@$$(ECHO) "  ECHO=PATH"
-	@$$(ECHO) "      [default: $(call ShowVar, ECHO)]"
-	@$$(ECHO) "      override the path to 'echo'; the new 'echo' should at"
-	@$$(ECHO) "      least support -n and -e options"
-	@$$(ECHO) "  EXESUFF=SUFFIX"
-	@$$(ECHO) "      [default: $(call ShowVar, EXESUFF)]"
-	@$$(ECHO) "      specify the suffix of executables used by"
-	@$$(ECHO) "      $(__mkutils_name__) (e.g. '.py')"
-	@$$(ECHO) "  EXPR=PATH"
-	@$$(ECHO) "      [default: $(call ShowVar, EXPR)]"
-	@$$(ECHO) \
-	"      override the path to 'expr'; the new 'expr' should be"
-	@$$(ECHO) \
-	"      compatible with POSIX 'expr' plus should support 'length'"
-	@$$(ECHO) \
-	"      operator; at least, these operators should be implemented:"
-	@$$(ECHO) "      +, -, *, /, %, length"
-	@$$(ECHO) "  FALSE=PATH"
-	@$$(ECHO) "      [default: $(call ShowVar, FALSE)]"
-	@$$(ECHO) "      override the path to 'false'; the new 'false' should"
-	@$$(ECHO) "      be compatible with POSIX 'false'"
-	@$$(ECHO) "  ISATTY=[0|1]"
-	@$$(ECHO) "      [default: $(call ShowVar, ISATTY)]"
-	@$$(ECHO) "      set to 1 if $(MAKE) is run from terminal"
-	@$$(ECHO) "  MSWINDOWS=[0|1]"
-	@$$(ECHO) "      [default: $(call ShowVar, MSWINDOWS)]"
-	@$$(ECHO) "      set to 1 if the environment is MS Windows specific"
-	@$$(ECHO) "  NOCOLORS=VALUE"
-	@$$(ECHO) "      [default: $(call ShowVar, NOCOLORS)]"
-	@$$(ECHO) \
-	"      define NOCOLORS to be an arbitrary value if colors should be"
-	@$$(ECHO) "      disabled while displaying the messages"
-	@$$(ECHO) "  PREFIX=PATH"
-	@$$(ECHO) "      [default: $(call ShowVar, PREFIX)]"
-	@$$(ECHO) "      specify the path to the directory with executables"
-	@$$(ECHO) \
-	"      used by $(__mkutils_name__); without PREFIX, executables are"
-	@$$(ECHO) "      searched in system default locations"
-	@$$(ECHO) "  PRINTF=PATH"
-	@$$(ECHO) "      [default: $(call ShowVar, PRINTF)]"
-	@$$(ECHO) \
-	"      override the path to 'printf'; the new 'printf' should be"
-	@$$(ECHO) \
-	"      compatible with POSIX 'printf'; at least, the format string"
-	@$$(ECHO) \
-	"      should support left-justify flag (-), field width, 's' (string)"
-	@$$(ECHO) \
-	"      conversion specifier and new-line escape sequence (\n)"
-	@$$(ECHO) "  TEST=PATH"
-	@$$(ECHO) "      [default: $(call ShowVar, TEST)]"
-	@$$(ECHO) "      override the path to 'test'; the new 'test' should be"
-	@$$(ECHO) \
-	"      compatible with POSIX 'test'; at least, 'test' should support"
-	@$$(ECHO) "      -t, -eq, -ne, -lt, -gt, -le, -ge options"
-	@$$(ECHO) "  TOOLS_EXESUFF=SUFFIX"
-	@$$(ECHO) "      [default: $(call ShowVar, TOOLS_EXESUFF)]"
-	@$$(ECHO) \
-	"      specify the suffix of tools used by $(__mkutils_name__); the"
-	@$$(ECHO) "      default value of SUFFIX is read from EXESUFF variable"
-	@$$(ECHO) "  TOOLS_PREFIX=PATH"
-	@$$(ECHO) "      [default: $(call ShowVar, TOOLS_PREFIX)]"
-	@$$(ECHO) "      specify the path to the directory with tools used"
-	@$$(ECHO) \
-	"      by $(__mkutils_name__); the default value of PATH is read from"
-	@$$(ECHO) "      PREFIX variable"
-	@$$(ECHO) "  TRUE=PATH"
-	@$$(ECHO) "      [default: $(call ShowVar, TRUE)]"
-	@$$(ECHO) "      override the path to 'true'; the new 'true' should be"
-	@$$(ECHO) "      compatible with POSIX 'true'"
-	@$$(ECHO) "  V=VALUE"
-	@$$(ECHO) "      [default: $(call ShowVar, V)]"
-	@$$(ECHO) \
-	"      define V to be an arbitrary value if more help should be"
-	@$$(ECHO) "      displayed"
-	@$$(ECHO) "  WHICH=PATH"
-	@$$(ECHO) "      [default: $(call ShowVar, WHICH)]"
-	@$$(ECHO) \
-	"      override the path to 'which'; 'which foo' should print the path"
-	@$$(ECHO) \
-	"      to 'foo' to stdout if 'foo' exists in standard system location"
-	@$$(ECHO) \
-	"      for executables and return 0 or return 1 if 'foo' cannot be"
-	@$$(ECHO) "      found"
+__mkutils_help_deps += $$(__mkutils_help_uvars)
+help_uvars_epilogue:
+	@$$(ECHO) ""
+__mkutils_help_deps += help_uvars_epilogue
+endif
+
+.PHONY: help_dvars_prologue help_dvars_epilogue
+__mkutils_help_deps += help_dvars_prologue
+ifneq ($$V,)
+help_dvars_prologue:
+	@$$(ECHO) "By default, $$(__mkutils_name__) supports these settings:"
+	@$$(ECHO) ""
+__mkutils_help_deps += $$(__mkutils_help_dvars)
 else
+help_dvars_prologue:
 	@$$(ECHO) "For more help, set V to an arbitrary value."
 endif
+help_dvars_epilogue:
 	@$$(ECHO) ""
+__mkutils_help_deps += help_dvars_epilogue
+
 .PHONY: help
-help: help_prologue $$(__mkutils_help_targets) help_epilogue
+help: $$(__mkutils_help_deps)
+
 endef
 
 ## ============================================================================
@@ -1709,6 +1941,60 @@ __mkutils_eval_test_result = $(strip \
 ## ============================================================================
 
 ##
+# AssociateVarWithTargets $1 $2
+# -----------------------------------------------------------------------------
+# $1 - user defined variable
+# $2 - list of targets affected by $1
+# -----------------------------------------------------------------------------
+# Associate $1 with $2.
+AssociateVarWithTargets = $(call KVSet, var2targets, $1, $2)
+
+##
+# GetTargetsAssociatedWithVar $1
+# -----------------------------------------------------------------------------
+# $1 - variable name
+# -----------------------------------------------------------------------------
+# Get a list of targets associated with $1.
+GetTargetsAssociatedWithVar = $(call KVGet, var2targets, $1)
+
+##
+# DocVar $1 $2 $3 $4
+# -----------------------------------------------------------------------------
+# $1 - variable kind (`DVar` for default variable, `UVar` for users' variable)
+# $2 - var=domain pair (`=domain` is optional)
+# $3 - help text
+# $4 - list of associated targets (optional)
+# -----------------------------------------------------------------------------
+# Generate commands that print help lines associated with $2.
+DocVar = $(call $(0)_,$1,$(call Head_,$(subst =, ,$2)),$2,$3,$4)
+DocVar_ = $(strip \
+    $(call AssociateVarWithTargets, $2, $5) \
+    $(call FormatHelp, $($(strip $1)NSQ).$2, $4) \
+    $(call GenerateHelpLines, $1, $3, GhlVarIntro GhlText) \
+)
+
+##
+# DocDefaultVar $1 $2
+# -----------------------------------------------------------------------------
+# $1 - var=domain pair (`=domain` is optional)
+# $2 - help text
+# -----------------------------------------------------------------------------
+# Generate commands that print help lines associated with $2. This macro is
+# intended for documenting mkutils predefined variables.
+DocDefaultVar = $(call DocVar, DVar, $1, $2)
+
+##
+# DocUserVar $1 $2 $3
+# -----------------------------------------------------------------------------
+# $1 - var=domain pair (`=domain` is optional)
+# $2 - help text
+# $3 - list of associated targets (optional)
+# -----------------------------------------------------------------------------
+# Generate commands that print help lines associated with $2. This macro is
+# intended for documenting variables defined by user.
+DocUserVar = $(call DocVar, UVar, $1, $2, $3)
+
+##
 # ShowVar $1
 # -----------------------------------------------------------------------------
 # $1 - variable name
@@ -1718,131 +2004,238 @@ ShowVar = $(call $(0)_,$(strip $1))
 ShowVar_ = $(if $(call Equal_,$(origin $1),undefined),undefined,'$($1)')
 
 ##
-# AddTool $1 $2
+# AddTool $1 $2 $3
 # -----------------------------------------------------------------------------
 # $1 - tool name (should be name of the binary without suffix)
-# $2 - variable name
+# $2 - variable name (optional)
+# $3 - help text (optional)
 # -----------------------------------------------------------------------------
 # Add tool $1 to Makefile. The added tool is accessible through $2. If $2 is
-# not given, uppercased $1 is used.
-AddTool = $(call $(0)_,$(strip $1),$(strip $2))
-AddTool_ = $(eval \
-    $(if $2,$2,$(call ToUpper,$1)) ?= $$(TOOLS_PREFIX)$(1)$$(TOOLS_EXESUFF) \
+# not given, uppercased $1 is used. If $3 is missing and $2 contains more than
+# 1 word, $3 is considered to be $2 and instead of $2 uppercased $1 is used.
+AddTool = $(call $(0)_,$(strip $1),$(strip $2),$(strip $3))
+AddTool_ = $(strip \
+    $(if $3, \
+        $(call $(0)a,$1,$(if $2,$2,$(call ToUpper,$1)),$3) \
+    ,$(if $(call Ge_,$(words $2),2), \
+        $(call $(0)a,$1,$(call ToUpper,$1),$2) \
+    , \
+        $(call $(0)a,$1,$(if $2,$2,$(call ToUpper,$1))) \
+    )) \
+)
+AddTool_a = $(strip \
+    $(if $3,$(call DocUserVar, $2=PATH, $3)) \
+    $(eval $2 ?= $$(TOOLS_PREFIX)$(1)$$(TOOLS_EXESUFF)) \
 )
 
 ##
-# AddToolW $1 $2
+# AddToolW $1 $2 $3
 # -----------------------------------------------------------------------------
 # $1 - tool name (should be name of the binary without suffix)
-# $2 - variable name
+# $2 - variable name (optional)
+# $3 - help text (optional)
 # -----------------------------------------------------------------------------
 # Invoke AddTool only if MS Windows environment was detected.
-AddToolW = $(call $(0)_$(MSWINDOWS),$1,$2)
+AddToolW = $(call $(0)_$(MSWINDOWS),$1,$2,$3)
 AddToolW_0 =
-AddToolW_1 = $(call AddTool,$1,$2)
+AddToolW_1 = $(call AddTool,$1,$2,$3)
 
 ##
-# AddToolX $1 $2
+# AddToolX $1 $2 $3
 # -----------------------------------------------------------------------------
 # $1 - tool name (should be name of the binary without suffix)
-# $2 - variable name
+# $2 - variable name (optional)
+# $3 - help text (optional)
 # -----------------------------------------------------------------------------
 # Invoke AddTool only if other than MS Windows environment was detected.
-AddToolX = $(call $(0)_$(MSWINDOWS),$1,$2)
-AddToolX_0 = $(call AddTool,$1,$2)
+AddToolX = $(call $(0)_$(MSWINDOWS),$1,$2,$3)
+AddToolX_0 = $(call AddTool,$1,$2,$3)
 AddToolX_1 =
 
 ##
-# AddVar $1 $2
+# AddVar $1 $2 $3 $4
 # -----------------------------------------------------------------------------
-# $1 - variable name
+# $1 - variable name (possibly with specified domain)
 # $2 - value
+# $3 - help text (optional)
+# $4 - list of associated targets (optional)
 # -----------------------------------------------------------------------------
 # Define $1 with $2 as its value if $1 was not previously defined.
-AddVar = $(eval $1 ?= $2)
+AddVar = $(call $(0)_,$(call Head_,$(subst =, ,$1)),$1,$2,$(strip $3),$4)
+AddVar_ = $(if $4,$(call DocUserVar, $2, $4, $5))$(eval $1 ?= $3)
 
 ##
-# AddVarW $1 $2
+# AddVarW $1 $2 $3 $4
 # -----------------------------------------------------------------------------
-# $1 - variable name
+# $1 - variable name (possibly with specified domain)
 # $2 - value
+# $3 - help text (optional)
+# $4 - list of associated targets (optional)
 # -----------------------------------------------------------------------------
 # Invoke AddVar only if MS Windows environment was detected.
-AddVarW = $(call $(0)_$(MSWINDOWS),$1,$2)
+AddVarW = $(call $(0)_$(MSWINDOWS),$1,$2,$3,$4)
 AddVarW_0 =
-AddVarW_1 = $(call AddVar,$1,$2)
+AddVarW_1 = $(call AddVar,$1,$2,$3,$4)
 
 ##
-# AddVarX $1 $2
+# AddVarX $1 $2 $3 $4
 # -----------------------------------------------------------------------------
-# $1 - variable name
+# $1 - variable name (possibly with specified domain)
 # $2 - value
+# $3 - help text (optional)
+# $4 - list of associated targets (optional)
 # -----------------------------------------------------------------------------
 # Invoke AddVar only if other than MS Windows environment was detected.
-AddVarX = $(call $(0)_$(MSWINDOWS),$1,$2)
-AddVarX_0 = $(call AddVar,$1,$2)
+AddVarX = $(call $(0)_$(MSWINDOWS),$1,$2,$3,$4)
+AddVarX_0 = $(call AddVar,$1,$2,$3,$4)
 AddVarX_1 =
 
 ##
-# DefVar $1 $2
+# DefVar $1 $2 $3 $4
 # -----------------------------------------------------------------------------
-# $1 - variable name
+# $1 - variable name (possibly with specified domain)
 # $2 - value
+# $3 - help text (optional)
+# $4 - list of associated targets (optional)
 # -----------------------------------------------------------------------------
 # Define $1 with $2 as its value.
-DefVar = $(eval $1 = $2)
+DefVar = $(call $(0)_,$(call Head_,$(subst =, ,$1)),$1,$2,$(strip $3),$4)
+DefVar_ = $(if $4,$(call DocUserVar, $2, $4, $5))$(eval $1 = $3)
 
 ##
-# DefVarW $1 $2
+# DefVarW $1 $2 $3 $4
 # -----------------------------------------------------------------------------
-# $1 - variable name
+# $1 - variable name (possibly with specified domain)
 # $2 - value
+# $3 - help text (optional)
+# $4 - list of associated targets (optional)
 # -----------------------------------------------------------------------------
 # Invoke DefVar only if MS Windows environment was detected.
-DefVarW = $(call $(0)_$(MSWINDOWS),$1,$2)
+DefVarW = $(call $(0)_$(MSWINDOWS),$1,$2,$3,$4)
 DefVarW_0 =
-DefVarW_1 = $(call DefVar,$1,$2)
+DefVarW_1 = $(call DefVar,$1,$2,$3,$4)
 
 ##
-# DefVarX $1 $2
+# DefVarX $1 $2 $3 $4
 # -----------------------------------------------------------------------------
-# $1 - variable name
+# $1 - variable name (possibly with specified domain)
 # $2 - value
+# $3 - help text (optional)
+# $4 - list of associated targets (optional)
 # -----------------------------------------------------------------------------
 # Invoke DefVar only if other than MS Windows environment was detected.
-DefVarX = $(call $(0)_$(MSWINDOWS),$1,$2)
-DefVarX_0 = $(call DefVar,$1,$2)
+DefVarX = $(call $(0)_$(MSWINDOWS),$1,$2,$3,$4)
+DefVarX_0 = $(call DefVar,$1,$2,$3,$4)
 DefVarX_1 =
 
 ##
-# SetVar $1 $2
+# SetVar $1 $2 $3 $4
 # -----------------------------------------------------------------------------
-# $1 - variable name
+# $1 - variable name (possibly with specified domain)
 # $2 - value
+# $3 - help text (optional)
+# $4 - list of associated targets (optional)
 # -----------------------------------------------------------------------------
 # Evaluate $2 and assing the result to $1.
-SetVar = $(eval $1 := $2)
+SetVar = $(call $(0)_,$(call Head_,$(subst =, ,$1)),$1,$2,$(strip $3),$4)
+SetVar_ = $(if $4,$(call DocUserVar, $2, $4, $5))$(eval $1 := $3)
 
 ##
-# SetVarW $1 $2
+# SetVarW $1 $2 $3 $4
 # -----------------------------------------------------------------------------
-# $1 - variable name
+# $1 - variable name (possibly with specified domain)
 # $2 - value
+# $3 - help text (optional)
+# $4 - list of associated targets (optional)
 # -----------------------------------------------------------------------------
 # Invoke SetVar only if MS Windows environment was detected.
-SetVarW = $(call $(0)_$(MSWINDOWS),$1,$2)
+SetVarW = $(call $(0)_$(MSWINDOWS),$1,$2,$3,$4)
 SetVarW_0 =
-SetVarW_1 = $(call SetVar,$1,$2)
+SetVarW_1 = $(call SetVar,$1,$2,$3,$4)
 
 ##
-# SetVarX $1 $2
+# SetVarX $1 $2 $3 $4
 # -----------------------------------------------------------------------------
-# $1 - variable name
+# $1 - variable name (possibly with specified domain)
 # $2 - value
+# $3 - help text (optional)
+# $4 - list of associated targets (optional)
 # -----------------------------------------------------------------------------
 # Invoke SetVar only if other than MS Windows environment was detected.
-SetVarX = $(call $(0)_$(MSWINDOWS),$1,$2)
-SetVarX_0 = $(call SetVar,$1,$2)
+SetVarX = $(call $(0)_$(MSWINDOWS),$1,$2,$3,$4)
+SetVarX_0 = $(call SetVar,$1,$2,$3,$4)
 SetVarX_1 =
+
+# Document variables defined by mkutils:
+$(call DocDefaultVar, TOOLS_PREFIX=PATH, \
+    specify the path to the directory with tools used by /n \
+    $(__mkutils_name__); the default value of PATH is read from PREFIX /n \
+    variable \
+)
+$(call DocDefaultVar, PREFIX=PATH, \
+    specify the path to the directory with executables /n \
+    used by $(__mkutils_name__); without PREFIX$(,) executables are /n \
+    searched in system default locations \
+)
+$(call DocDefaultVar, TOOLS_EXESUFF=SUFFIX, \
+    specify the suffix of tools used by $(__mkutils_name__); the /n \
+    default value of SUFFIX is read from EXESUFF variable \
+)
+$(call DocDefaultVar, EXESUFF=SUFFIX, \
+    specify the suffix of executables used by $(__mkutils_name__) /n \
+    $([)e.g. '.py'$(]) \
+)
+$(call DocDefaultVar, TRUE=PATH, \
+    override the path to 'true'; the new 'true' should be /n \
+    compatible with POSIX 'true' \
+)
+$(call DocDefaultVar, FALSE=PATH, \
+    override the path to 'false'; the new 'false' should /n \
+    be compatible with POSIX 'false' \
+)
+$(call DocDefaultVar, ECHO=PATH, \
+    override the path to 'echo'; the new 'echo' should /n \
+    at least support -n and -e options \
+)
+$(call DocDefaultVar, TEST=PATH, \
+    override the path to 'test'; the new 'test' should /n \
+    be compatible with POSIX 'test'; at least$(,) 'test' /n \
+    should support -t$(,) -eq$(,) -ne$(,) -lt$(,) -gt$(,) -le$(,) -ge /n \
+    options \
+)
+$(call DocDefaultVar, WHICH=PATH, \
+    override the path to 'which'; 'which foo' should print /n \
+    the path to 'foo' to stdout if 'foo' exists in standard /n \
+    system location for executables and return 0 or return 1 /n \
+    if 'foo' cannot be found \
+)
+$(call DocDefaultVar, PRINTF=PATH, \
+    override the path to 'printf'; the new 'printf' /n \
+    should be compatible with POSIX 'printf'; at least$(,) /n \
+    the format string should support left-justify flag /n \
+    $([)-$(])$(,) field width$(,) 's' $([)string$(]) conversion specifier /n \
+    and new-line escape sequence $([)\\\\n$(]) \
+)
+$(call DocDefaultVar, EXPR=PATH, \
+    override the path to 'expr'; the new 'expr' should /n \
+    be compatible with POSIX 'expr' plus should support /n \
+    'length' operator; at least$(,) these operators should /n \
+    be implemented: /n \
+    +$(,) -$(,) *$(,) /$(,) %%$(,) length \
+)
+$(call DocDefaultVar, MSWINDOWS=[0|1], \
+    set to 1 if the environment is MS Windows specific \
+)
+$(call DocDefaultVar, ISATTY=[0|1], \
+    set to 1 if $(MAKE) is run from terminal \
+)
+$(call DocDefaultVar, NOCOLORS=VALUE, \
+    define NOCOLORS to be an arbitrary value if colors /n \
+    should be disabled while displaying the messages \
+)
+$(call DocDefaultVar, V=VALUE, \
+    define V to be an arbitrary value if more help should /n \
+    be displayed \
+)
 
 endif

@@ -1,0 +1,18 @@
+#!/bin/sh
+
+P=$(basename $0)
+D=${1:-$PWD}
+
+case "x$D" in
+  x-h | x-? | x--help)
+    echo "Usage: $P [-h | -? | --help] [DEST]" >&2
+    echo "" >&2
+    echo "Copy @INCFILE@ to DEST.  If DEST is not given, current" >&2
+    echo "working directory is used.  If one of -h, -?, or --help" >&2
+    echo "is present, $P prints its help and exit." >&2
+    echo "" >&2
+    exit 0
+    ;;
+esac
+
+cp @INCPATH@ $D/@INCFILE@

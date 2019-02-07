@@ -620,6 +620,12 @@ $(call TestFunc2,Mod,25,3,1)
 $(call TestFunc2,Mod,0,12,0)
 $(call TestAssert,Mod,10,0)
 
+# IfEmpty
+$(call TestInfo,IfEmpty)
+$(call TestFunc2,IfEmpty, a, b,a)
+$(call TestFunc2,IfEmpty, , b,b)
+$(call TestFunc2,IfEmpty, , ,)
+
 # Eq
 $(call TestInfo,Eq)
 $(call TestFunc2,Eq,1,1,X)
