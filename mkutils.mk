@@ -73,6 +73,14 @@ MSWINDOWS ?= 0
 endif
 export MSWINDOWS
 
+# Determine shell quote
+ifneq ($(MSWINDOWS),1)
+SHQ := '
+else
+SHQ := "
+endif
+export SHQ
+
 # Detect if we are running in interactive shell
 ifneq ($(MSWINDOWS),1)
   ifeq ($(ISATTY),)

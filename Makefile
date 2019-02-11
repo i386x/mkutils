@@ -52,8 +52,8 @@ $(call TargetX, install, install $(NAME))
 	$(EDIT) $(CURDIR)/$(INCFILE) > $(INCPATH)
 	$(CHMOD) 644 $(INCPATH)
 	$(CAT) $(CURDIR)/$(BUNDLESCRIPTFILE).in \
-	| $(SED) -e 's,@INCFILE@,$(INCFILE),g' \
-	         -e 's,@INCPATH@,$(INCPATH),g' \
+	| $(SED) -e $(SHQ)s,@INCFILE@,$(INCFILE),g$(SHQ) \
+	         -e $(SHQ)s,@INCPATH@,$(INCPATH),g$(SHQ) \
 	> $(BUNDLESCRIPTPATH)
 	$(CHMOD) 755 $(BUNDLESCRIPTPATH)
 
