@@ -45,7 +45,7 @@ $(call SetVarX, INCPATH, $$(INCDIR)/$$(INCFILE))
 $(call SetVarX, BUNDLESCRIPTFILE, $$(NAME)-bundle)
 $(call SetVarX, BUNDLESCRIPTPATH, $$(bindir)/$$(BUNDLESCRIPTFILE))
 
-EDIT := $(SED) -e 's,^\#! \\file    ~/$(INCFILE)$$,\#! \\file    $(INCFILE),g'
+EDIT := $(SED) -f $(CURDIR)/striptilde.sed
 
 $(call TargetX, install, install $(NAME))
 	$(MKDIR) -p $(INCDIR)
