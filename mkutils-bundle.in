@@ -4,7 +4,7 @@ P=$(basename $0)
 D=${1:-$PWD}
 
 case "x$D" in
-  x-h | x-? | x--help)
+  x-h | x-\? | x--help)
     echo "Usage: $P [-h | -? | --help] [DEST]" >&2
     echo "" >&2
     echo "Copy @INCFILE@ to DEST.  If DEST is not given, current" >&2
@@ -12,6 +12,11 @@ case "x$D" in
     echo "is present, $P prints its help and exit." >&2
     echo "" >&2
     exit 0
+    ;;
+  x-*)
+    echo "$P: unrecognized option '$D'" >&2
+    echo "Try '$P --help' for more information." >&2
+    exit 1
     ;;
 esac
 
